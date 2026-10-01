@@ -1,0 +1,11 @@
+Summary of the Problem Statement
+In 5G network slicing, when a UE(User Equipment) moves between cells, the target cell may not have enough resources for the upcoming handover. Predicting the UE's movement and resource demand can help reserve resources in advance, but prediction is uncertain.
+
+Therefore, our project focuses on deciding whether, when, and how much resource to reserve in the predicted target cell, while balancing:
+
+Handover QoS and reliability
+Resource reservation waste
+Current target-cell resource availability
+Slice QoS/SLA requirements
+Prediction uncertainty 
+A PPO-based agent will learn this reservation decision.

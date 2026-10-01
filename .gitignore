@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.pytest_tmp/
+.mplconfig/
+.edge-profile/
+.edge-*/
+paper.aux
+paper.bbl
+paper.blg
+paper.log
+paper.out

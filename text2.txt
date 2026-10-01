@@ -1,0 +1,140 @@
+What are we doing?
+
+Our project is about proactive resource reservation for 5G network-sliced handovers.
+
+When a UE moves from its current cell to another cell, the target cell may not have enough resources when the handover happens. So, instead of waiting until the handover, we want to reserve some resources in advance.
+
+However, the predicted target cell, handover time, and resource demand are not always accurate. Therefore, reserving too much wastes resources, while reserving too little can cause handover failure or QoS/SLA violations.
+
+So our main idea is:
+
+Use a PPO-based agent to make an intelligent resource-reservation decision under prediction uncertainty.
+
+What do we want to do now?
+
+We want to build a system where:
+
+UE mobility → Prediction → Uncertainty → PPO decision → Resource reservation → Handover → Feedback
+
+The PPO agent will look at the current network situation and decide:
+
+Whether to reserve resources
+How much resource to reserve
+When to reserve the resources
+
+The decision will consider:
+
+Probability/confidence of the predicted handover
+Expected time until handover
+Predicted resource demand of the UE
+Available resources in the target cell
+Current target-cell load
+Slice QoS/SLA requirements
+Prediction uncertainty
+
+The agent should learn to achieve:
+
+High handover reliability + QoS satisfaction + efficient resource utilization − unnecessary reservation/wastage
+
+What is our Problem Formulation?
+
+The problem can be formulated as a constrained sequential decision/optimization problem.
+
+Decision variables
+
+For UE \(i\), target cell \(j\), at time \(t\):
+
+$$ a_{i,j,t} = (\text{reserve decision},\text{reservation amount},\text{reservation timing}) $$
+
+For example:
+
+Reserve = 0 or 1
+Amount = number of RBs
+Timing = when reservation should be activated
+Main objective
+
+We want to maximize handover reliability and QoS while minimizing resource wastage:
+
+$$ \max \quad \alpha H + \beta Q - \gamma W - \delta C $$
+
+where:
+
+\(H\) = handover reliability/success
+\(Q\) = QoS/SLA satisfaction
+\(W\) = unused/wasted reserved resources
+\(C\) = reservation cost/resource utilization penalty
+\(\alpha,\beta,\gamma,\delta\) = weighting factors
+
+So essentially:
+
+Don't reserve too little, but also don't reserve unnecessarily too much.
+
+Main constraints
+1. Target-cell capacity
+
+The reserved and already allocated resources cannot exceed the target cell's capacity:
+
+$$ R^{allocated}_{j,t}+R^{reserved}_{j,t} \leq C_j $$
+2. Reservation cannot exceed predicted demand
+$$ R^{reserved}_{i,j,t} \leq D^{pred}_{i,j,t} $$
+
+where \(D^{pred}\) is the predicted resource demand.
+
+3. Slice QoS/SLA
+
+The reservation decision should ensure that the UE's slice requirements are satisfied after handover:
+
+$$ R_{i,j,t} \geq R^{SLA}_{i} $$
+
+when required by the slice.
+
+4. Slice isolation
+
+Reserving resources for one slice should not cause another slice to violate its minimum resource/SLA requirement.
+
+5. Timing constraint
+
+Resources should be reserved within an appropriate period before the predicted handover.
+
+For example:
+
+$$ 0 \leq T^{reserve}_{i,j} \leq T^{HO}_{i,j} $$
+How PPO fits into this
+
+The optimization problem tells us what we want to achieve.
+
+PPO learns how to make the decisions dynamically.
+
+State
+
+The PPO agent observes:
+
+$$ s_t = [ P_{HO}, U_{pred}, D_{pred}, R_{available}, L_{target}, T_{HO}, Q_{SLA}, \ldots ] $$
+
+So it knows things such as:
+
+Handover probability
+Prediction uncertainty
+Predicted demand
+Target-cell available resources
+Target-cell load
+Time to handover
+Slice QoS requirements
+Action
+$$ a_t = [\text{reserve?},\text{amount},\text{timing}] $$
+Reward
+
+The agent receives a high reward when:
+
+Handover succeeds
+QoS is maintained
+SLA is satisfied
+Resources are efficiently utilized
+
+And receives penalties when:
+
+Handover fails
+QoS/SLA is violated
+Too many resources are reserved
+Reserved resources remain unused
+Reservation unnecessarily blocks other users/slices

@@ -1,0 +1,12 @@
+.venv
+.git
+.pytest_cache
+.pytest_tmp
+.mplconfig
+.edge-profile
+__pycache__
+*.pyc
+results/*.gif
+results/*.png
+results/figures
+paper.*

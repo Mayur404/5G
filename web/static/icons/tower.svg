@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 132" role="img" aria-label="Isometric cell tower">
+ <defs><linearGradient id="front" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#48515c"/><stop offset="1" stop-color="#141a21"/></linearGradient><linearGradient id="side" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#7b8590"/><stop offset="1" stop-color="#38414b"/></linearGradient></defs>
+ <ellipse cx="61" cy="120" rx="34" ry="7" fill="#cdd3da" opacity=".7"/>
+ <path d="M60 17 37 112h14l9-38 9 38h14L60 17Z" fill="url(#front)" stroke="#202833" stroke-width="2"/>
+ <path d="M60 17 83 112H69L60 74Z" fill="url(#side)"/>
+ <path d="M44 92h32M48 74h24M52 56h16M56 38h8" stroke="#aeb6be" stroke-width="3" stroke-linecap="round"/>
+ <path d="M41 109h18l-3 7H35Zm20 0h18l7 7H64Z" fill="#303943"/>
+ <path d="M60 10v22" stroke="#252d36" stroke-width="5" stroke-linecap="round"/>
+ <path d="M47 22h26" stroke="#252d36" stroke-width="3"/>
+ <rect x="41" y="16" width="7" height="15" rx="2" fill="#e7ebee" stroke="#59636d" stroke-width="1.5"/>
+ <rect x="72" y="16" width="7" height="15" rx="2" fill="#e7ebee" stroke="#59636d" stroke-width="1.5"/>
+ <path d="M58 7h4v8h-4z" fill="#e42b0c"/>
+ <path d="M29 20a40 40 0 0 1 0 20M91 20a40 40 0 0 0 0 20" fill="none" stroke="#b9c1c9" stroke-width="2" stroke-linecap="round"/>
+</svg>

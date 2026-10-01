@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=70"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "proran"
+version = "1.0.0"
+description = "Uncertainty-aware proactive reservation for sliced 5G RAN handovers"
+requires-python = ">=3.10"
+dependencies = ["numpy", "matplotlib", "rich"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "--basetemp=.pytest_tmp"

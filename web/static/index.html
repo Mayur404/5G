@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f5f5">
+  <title>ProRAN | Six-device handover lab</title>
+  <link rel="stylesheet" href="/static/lab.css">
+  <script src="/static/lab.js" defer></script>
+</head>
+<body>
+  <header class="topbar"><div class="topbar-inner"><div class="brand"><span class="brand-mark">P<span></span></span><span>ProRAN <small>RESEARCH LAB</small></span></div><span class="topbar-note">SYNTHETIC 5G RAN SLICING · LOCAL SIMULATION</span></div></header>
+  <main>
+    <section class="intro">
+      <div><p class="eyebrow">THE SIX-DEVICE HANDOVER LAB</p><h1>One moving car. <em>Two different outcomes.</em></h1><p class="lede">Watch the highlighted uRLLC car cross a cell boundary. Both networks see the same movement and demand; only the PPO side may hold target-tower resource blocks before arrival.</p></div>
+      <div class="controls"><label for="scenario">EXAMPLE TRACE</label><select id="scenario"><option value="urban">Predict a uRLLC car handover</option><option value="crossing">Fast crossing into a busy cell</option></select><p id="scenarioDescription"></p><div class="control-row"><button id="playBtn" type="button" aria-pressed="false"><span id="playIcon">Ⅱ</span><span id="playText">Pause</span></button><div class="sim-clock"><small>SIMULATED TIME</small><strong id="simTime">0.0 s</strong></div></div></div>
+    </section>
+
+    <section class="workspace">
+      <article class="map-panel"><div class="map-heading"><div><p class="eyebrow">LIVE PPO NETWORK / SIX DEVICES TOTAL</p><h2>One shared world, one clear handover</h2><p>The map shows PPO service and reservations. Compare its outcome with the no-reservation network on the right.</p></div><div class="zoom-controls" aria-label="Map zoom"><button id="zoomOut" type="button" aria-label="Zoom out">−</button><span id="zoomLevel">100%</span><button id="zoomIn" type="button" aria-label="Zoom in">+</button><button id="fitMap" type="button">Fit</button></div></div><div class="canvas-frame"><canvas id="networkCanvas" aria-label="Zoomable map of six devices and four towers"></canvas></div><div class="map-legend"><span><i class="symbol focus"></i> Focus car</span><span><i class="symbol service"></i> Active RB service</span><span><i class="symbol hold"></i> PPO reservation</span><span><i class="symbol weak"></i> Weak signal proxy</span><span class="map-hint">Wheel to zoom · drag to pan · click a tower</span></div></article>
+
+      <aside class="guide-rail">
+        <section class="step-card" aria-live="polite"><div class="step-top"><span id="phaseNumber">01</span><p id="phaseLabel">APPROACH</p></div><h2 id="phaseTitle">Follow the highlighted car.</h2><p id="phaseText">Its serving tower sends RB service along the solid line. The red ring marks a weak distance-based signal proxy near a cell edge.</p></section>
+        <section class="rail-card"><p class="eyebrow">SAME MOVEMENT · DIFFERENT ADMISSION</p><h2>Handover outcome</h2><div class="outcome-grid"><div class="outcome baseline"><span>NO RESERVATION</span><strong id="normalOutcome">Waiting for crossing</strong><small id="normalScore">0 / 0 admitted</small></div><div class="outcome proposed"><span>PPO RESERVATION</span><strong id="proposedOutcome">Watching for a hold</strong><small id="proposedScore">0 / 0 admitted</small></div></div><p class="fineprint">Admission requires the slice’s minimum RBs; full-demand QoS is checked separately.</p></section>
+        <section class="rail-card tower-card"><div class="rail-title"><div><p class="eyebrow">CLICK A TOWER ON THE MAP</p><h2 id="towerHeading">Tower C0</h2></div><div class="tower-nav" id="towerNav"></div></div><div class="tower-ledgers"><div id="normalTower"></div><div id="proposedTower"></div></div><p class="fineprint">Allocated + held + free = capacity. Orange is protected RB capacity, not guaranteed radio throughput.</p></section>
+        <section class="rail-card model-card"><p class="eyebrow">LOCAL MODEL DECISION</p><h2 id="decisionHeading">Waiting for a forecast</h2><p id="decisionText">PPO chooses reservation amount and activation time, never the destination tower.</p><div id="decisionFacts" class="decision-facts"></div></section>
+      </aside>
+    </section>
+
+    <section class="evidence"><div><p class="eyebrow">RESEARCH CONTEXT</p><h2>What this does—and does not—prove.</h2><p>These are curated six-device teaching traces, not the evaluation set. The saved controller is a <strong>linear PPO RL model, not deep learning</strong>. Handover target selection is geometric; forecast confidence is heuristic, and signal colors are a distance proxy rather than measured RSRP/SINR. This is a synthetic system-level demonstrator, not a field-ready 5G controller.</p></div><div class="benchmark"><small>SEPARATE 20-SEED, 32-DEVICE BENCHMARK</small><strong id="benchmarkStat">Loading…</strong><span>Handover admission rate. PPO is not best against every baseline.</span><a href="/paper.tex">View manuscript source →</a></div></section>
+  </main>
+  <footer>ProRAN · Synthetic research demonstrator · RB = resource block</footer>
+</body>
+</html>
