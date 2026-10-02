@@ -196,14 +196,14 @@ function drawMap(now) {
   }
   ctx.restore();
 
-  // 2. Transparent / Translucent Transit Corridors (Clean & Visible)
+  // 2. Transparent / Translucent Transit Corridors (Clean, Sleek & Scaled)
   ctx.save();
-  const roadWidth = p.side * 0.22; // Wide roads filling across the screen
+  const roadWidth = p.side * 0.075; // Sleek, proportional road corridors matching the metric scale
   const vCorridors = [25, 75];
   const hCorridors = [25, 50, 75];
 
   // A. Translucent Roadbed Fill
-  ctx.fillStyle = "rgba(226, 232, 240, 0.72)";
+  ctx.fillStyle = "rgba(226, 232, 240, 0.65)";
   for (const rx of vCorridors) {
     ctx.fillRect(p.x(rx) - roadWidth / 2, 0, roadWidth, height);
   }
@@ -213,7 +213,7 @@ function drawMap(now) {
 
   // B. Clean Corridor Curbs / Borders
   ctx.strokeStyle = "#cbd5e1";
-  ctx.lineWidth = 1.4;
+  ctx.lineWidth = 1.0;
   ctx.beginPath();
   for (const rx of vCorridors) {
     const px = p.x(rx);
@@ -233,8 +233,8 @@ function drawMap(now) {
 
   // C. Road Dash Centerlines
   ctx.strokeStyle = "#94a3b8";
-  ctx.lineWidth = 1.5;
-  ctx.setLineDash([8, 8]);
+  ctx.lineWidth = 1.2;
+  ctx.setLineDash([5, 5]);
   ctx.beginPath();
   for (const rx of vCorridors) {
     const px = p.x(rx);
@@ -1359,9 +1359,9 @@ async function advance(generation) {
   app.busy = true;
   try {
     const snapshot = await requestJSON("/api/step", {session: app.token, count: 1});
-    if (generation === app.generation) acceptSnapshot(snapshot);
+    if (generation === app.generation && app.playing) acceptSnapshot(snapshot);
   } catch (error) {
-    if (generation === app.generation) showError(error);
+    if (generation === app.generation && app.playing) showError(error);
   } finally {
     app.busy = false;
     if (app.playing && generation === app.generation) {
