@@ -765,13 +765,19 @@ function drawMap(now) {
       ctx.stroke();
     }
 
-    // Icon render with dynamic travel heading rotation
-    const heading = (ue.vx !== 0 || ue.vy !== 0) ? Math.atan2(ue.vy, ue.vx) : 0;
+    // Icon render: side-view car stays upright (flips on horizontal movement), drones/robots rotate with heading
     const icon = icons[ue.entity_type];
     if (icon && icon.complete && icon.naturalWidth) {
       ctx.save();
       ctx.translate(pos.x, pos.y);
-      ctx.rotate(heading);
+      if (ue.entity_type === "car") {
+        if (ue.vx < -0.05) {
+          ctx.scale(-1, 1);
+        }
+      } else {
+        const heading = (ue.vx !== 0 || ue.vy !== 0) ? Math.atan2(ue.vy, ue.vx) : 0;
+        ctx.rotate(heading);
+      }
       ctx.drawImage(icon, -iconSize / 2, -iconSize / 2, iconSize, iconSize);
       ctx.restore();
     } else {
