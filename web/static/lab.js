@@ -254,7 +254,7 @@ function drawMap(now) {
   ctx.fillText("CELL BOUNDARY · HANDOVER FRONTIER", p.x(50), p.y(50) - 7);
   ctx.restore();
 
-  // 2. Translucent RF Coverage Contour Rings & Dynamic Waves from each cell tower
+  // 2. Translucent RF Coverage Contour Rings, 3GPP Sector Boresights & Dynamic Waves from each cell tower
   for (const cell of network.cells) {
     const cx = p.x(cell.x), cy = p.y(cell.y);
     const r1 = p.side * 0.18, r2 = p.side * 0.32, r3 = p.side * 0.46;
@@ -265,6 +265,19 @@ function drawMap(now) {
     ctx.arc(cx, cy, r1, 0, Math.PI * 2);
     ctx.arc(cx, cy, r2, 0, Math.PI * 2);
     ctx.stroke();
+
+    // 3GPP Tri-Sector AAU Beam Boresights (30°, 150°, 270°)
+    const sectorAngles = [Math.PI / 6, 5 * Math.PI / 6, 3 * Math.PI / 2];
+    ctx.strokeStyle = "rgba(100, 116, 139, 0.15)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 5]);
+    for (const ang of sectorAngles) {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(ang) * (p.side * 0.38), cy + Math.sin(ang) * (p.side * 0.38));
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
 
     // Handover decision threshold perimeter (r3)
     ctx.strokeStyle = "rgba(228, 43, 12, 0.18)";
@@ -277,9 +290,8 @@ function drawMap(now) {
     // Dynamic RF propagation ripple wave
     const waveProgress = (visualNow * 0.00045 + cell.id * 0.25) % 1;
     const waveR = p.side * (0.05 + 0.40 * waveProgress);
-    ctx.strokeStyle = `rgba(14, 165, 233, ${0.2 * (1 - waveProgress)})`;
-    ctx.lineWidth = 1.4;
-    ctx.setLineDash([]);
+    ctx.strokeStyle = `rgba(14, 165, 233, ${0.22 * (1 - waveProgress)})`;
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.arc(cx, cy, waveR, 0, Math.PI * 2);
     ctx.stroke();
@@ -302,7 +314,7 @@ function drawMap(now) {
     ctx.restore();
   }
 
-  // 4. Focus UE Active Serving Carrier Beam
+  // 4. Focus UE Active Serving Carrier Beam with 5G Massive MIMO Beamforming
   if (focus) {
     const pos = pointFor(focus, previous, alpha, p);
     const cell = network.cells[focus.cell];
@@ -314,8 +326,32 @@ function drawMap(now) {
     ctx.save();
     // Quality-adaptive beam coloration: cyan for high SINR proxy, amber when approaching boundary
     const beamColor = quality < 0.48 ? "#f59e0b" : "#0284c7";
-    const beamGlow = quality < 0.48 ? "rgba(245, 158, 11, 0.25)" : "rgba(2, 132, 199, 0.22)";
+    const beamGlow = quality < 0.48 ? "rgba(245, 158, 11, 0.28)" : "rgba(2, 132, 199, 0.24)";
 
+    // Directional 5G Massive MIMO Beamforming Cone
+    const dist = Math.hypot(pos.x - sx, pos.y - sy);
+    if (dist > 5 && connected) {
+      const nx = (pos.x - sx) / dist;
+      const ny = (pos.y - sy) / dist;
+      const px = -ny; // perpendicular normal
+      const py = nx;
+      const beamSpread = clamp(dist * 0.11, 10, 28);
+
+      const coneGrad = ctx.createLinearGradient(sx, sy, pos.x, pos.y);
+      coneGrad.addColorStop(0, quality < 0.48 ? "rgba(245, 158, 11, 0.28)" : "rgba(2, 132, 199, 0.24)");
+      coneGrad.addColorStop(0.7, quality < 0.48 ? "rgba(245, 158, 11, 0.08)" : "rgba(2, 132, 199, 0.07)");
+      coneGrad.addColorStop(1, "rgba(2, 132, 199, 0.0)");
+
+      ctx.fillStyle = coneGrad;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(pos.x + px * beamSpread, pos.y + py * beamSpread);
+      ctx.lineTo(pos.x - px * beamSpread, pos.y - py * beamSpread);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // High-contrast core carrier laser beam
     ctx.strokeStyle = connected ? beamGlow : "rgba(239, 68, 68, 0.2)";
     ctx.lineWidth = 10;
     ctx.beginPath();
@@ -332,21 +368,43 @@ function drawMap(now) {
     ctx.stroke();
     ctx.restore();
 
-    // Flowing Data Packets
+    // Flowing 5G Radio Packets / OFDM Symbols
     if (connected) {
       for (let packet = 0; packet < 4; packet++) {
-        const fraction = (visualNow * 0.00042 + packet * 0.25) % 1;
+        const fraction = (visualNow * 0.00045 + packet * 0.25) % 1;
         const px = sx + (pos.x - sx) * fraction;
         const py = sy + (pos.y - sy) * fraction;
         ctx.save();
         ctx.fillStyle = beamColor;
         ctx.shadowColor = beamColor;
-        ctx.shadowBlur = 6;
+        ctx.shadowBlur = 8;
         ctx.beginPath();
         ctx.arc(px, py, 4, 0, Math.PI * 2);
         ctx.fill();
+
+        // Packet motion tail
+        ctx.strokeStyle = beamColor;
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.55;
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(px - (pos.x - sx) * 0.035, py - (pos.y - sy) * 0.035);
+        ctx.stroke();
         ctx.restore();
       }
+    }
+
+    // 3GPP A3 Handover Trigger Alert Tag when approaching cell boundary (hidden once HO is admitted)
+    if (quality < 0.48 && (!app.pulse || (visualNow - app.pulse.at >= 3200))) {
+      roundedLabel(
+        ctx,
+        "⚠️ 3GPP A3 EVENT: RSRP FADING · HO TRIGGERED",
+        clamp(pos.x, 140, width - 140),
+        clamp(pos.y - 48, 28, height - 28),
+        "#0f172a",
+        "#f59e0b",
+        "#f59e0b"
+      );
     }
   }
 
@@ -361,15 +419,15 @@ function drawMap(now) {
     const midY = (pos.y + ty) / 2 - (p.side * 0.12);
 
     ctx.save();
-    // Glow effect
-    ctx.strokeStyle = active ? "rgba(228, 43, 12, 0.22)" : "rgba(245, 158, 11, 0.18)";
-    ctx.lineWidth = 8;
+    // Radiant Glow
+    ctx.strokeStyle = active ? "rgba(228, 43, 12, 0.28)" : "rgba(245, 158, 11, 0.22)";
+    ctx.lineWidth = 10;
     ctx.beginPath();
     ctx.moveTo(pos.x, pos.y);
     ctx.quadraticCurveTo(midX, midY, tx, ty);
     ctx.stroke();
 
-    // Main line
+    // Main reservation curve
     ctx.strokeStyle = active ? "#e42b0c" : "#f59e0b";
     ctx.lineWidth = 3.5;
     ctx.setLineDash(active ? [10, 7] : [5, 7]);
@@ -391,15 +449,15 @@ function drawMap(now) {
 
       ctx.save();
       ctx.fillStyle = active ? "#e42b0c" : "#f59e0b";
-      ctx.shadowColor = active ? "rgba(228, 43, 12, 0.85)" : "rgba(245, 158, 11, 0.85)";
-      ctx.shadowBlur = 8;
+      ctx.shadowColor = active ? "rgba(228, 43, 12, 0.9)" : "rgba(245, 158, 11, 0.9)";
+      ctx.shadowBlur = 9;
       ctx.beginPath();
-      ctx.arc(qx, qy, 4.5, 0, Math.PI * 2);
+      ctx.arc(qx, qy, 4.8, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
 
-    // Floating Badge for Reservation
+    // Floating Badge for Reservation at Target Tower
     const badgeX = tx < width / 2 ? tx + 115 : tx - 115;
     const badgeText = `${contract.amount} RB ${active ? "HELD" : "REQUESTED"}`;
     roundedLabel(
@@ -408,6 +466,17 @@ function drawMap(now) {
       clamp(ty - 88, 30, height - 30),
       active ? "#0f172a" : "#1e293b",
       "#ffffff",
+      active ? "#e42b0c" : "#f59e0b"
+    );
+
+    // Mid-arc Reservation Formula Badge
+    roundedLabel(
+      ctx,
+      active ? `PPO RESERVED: ${contract.amount} RB (Eq. 21)` : `PPO QUEUED (${contract.amount} RB)`,
+      clamp(midX, 90, width - 90),
+      clamp(midY - 14, 25, height - 25),
+      "rgba(15, 23, 42, 0.94)",
+      active ? "#ff7a59" : "#fbbf24",
       active ? "#e42b0c" : "#f59e0b"
     );
   }
@@ -566,8 +635,18 @@ function drawMap(now) {
     ctx.fill();
     ctx.restore();
 
+    // Expanding Boundary Shockwave Wave at handover crossing
+    const waveR = progress * p.side * 0.35;
+    ctx.save();
+    ctx.strokeStyle = `rgba(16, 185, 129, ${0.8 * (1 - progress)})`;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(p.x(25), p.y(50), waveR, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
     // Top Celebration Banner
-    roundedLabel(ctx, "PPO HANDOVER ADMITTED", width / 2, 42, "#047857", "#ffffff", "#10b981");
+    roundedLabel(ctx, "⚡ PPO HANDOVER ADMITTED · ZERO-DROP SLA PRESERVED (Eq. 22)", width / 2, 42, "#047857", "#ffffff", "#10b981");
   }
 
   // 8. Focus Vehicle Breadcrumb Motion Trail
@@ -686,10 +765,15 @@ function drawMap(now) {
       ctx.stroke();
     }
 
-    // Icon render
+    // Icon render with dynamic travel heading rotation
+    const heading = (ue.vx !== 0 || ue.vy !== 0) ? Math.atan2(ue.vy, ue.vx) : 0;
     const icon = icons[ue.entity_type];
     if (icon && icon.complete && icon.naturalWidth) {
-      ctx.drawImage(icon, pos.x - iconSize / 2, pos.y - iconSize / 2, iconSize, iconSize);
+      ctx.save();
+      ctx.translate(pos.x, pos.y);
+      ctx.rotate(heading);
+      ctx.drawImage(icon, -iconSize / 2, -iconSize / 2, iconSize, iconSize);
+      ctx.restore();
     } else {
       ctx.fillStyle = "#334155";
       ctx.beginPath();
@@ -702,11 +786,12 @@ function drawMap(now) {
     if (focused) {
       roundedLabel(
         ctx,
-        `UE${ue.id} · ${ue.slice} CAR`,
+        `${ue.slice.toUpperCase()} CAR · UE${ue.id} (${ue.demand} RB SLA)`,
         clamp(pos.x, 90, width - 90),
         clamp(pos.y + 56, 24, height - 24),
         "#0f172a",
-        "#ffffff"
+        "#ffffff",
+        "#38bdf8"
       );
     } else if (!focusPosition || Math.hypot(pos.x - focusPosition.x, pos.y - focusPosition.y) > 66) {
       ctx.save();
@@ -770,6 +855,50 @@ function drawMap(now) {
       const sSum = cell.slices.map(s => `${s.name.slice(0, 4)}: ${s.allocated}RB`).join(" · ");
       ctx.fillText(`Load: ${Math.round(cell.load * 100)}%  ·  ${sSum}`, cardX + 12, cardY + 60);
     }
+    ctx.restore();
+  }
+
+  // 11. Top-Right Real-Time Simulation Telemetry HUD on Canvas
+  if (width >= 420 && focus) {
+    const hudW = 236, hudH = 92;
+    const hudX = width - hudW - 14, hudY = 14;
+    ctx.save();
+    ctx.shadowColor = "rgba(15, 23, 42, 0.25)";
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetY = 3;
+    ctx.fillStyle = "rgba(15, 23, 42, 0.92)";
+    ctx.beginPath();
+    ctx.roundRect(hudX, hudY, hudW, hudH, 8);
+    ctx.fill();
+
+    ctx.shadowColor = "transparent";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.14)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+
+    ctx.font = "800 10px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+    ctx.fillStyle = "#38bdf8";
+    ctx.fillText("5G PPO RAN TELEMETRY · LIVE HUD", hudX + 12, hudY + 16);
+
+    ctx.font = "600 9.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+    ctx.fillStyle = "#f1f5f9";
+    const prior = previous?.ues.find(item => item.id === focus.id) || focus;
+    const quality = prior.signal_quality + (focus.signal_quality - prior.signal_quality) * alpha;
+    ctx.fillText(`Serving: Tower C${focus.cell}  ·  RSRP: ${Math.round(quality * 100)}%`, hudX + 12, hudY + 34);
+
+    const contract = network.contracts.find(item => item.ue === focusId);
+    ctx.fillStyle = contract?.active ? "#ff7a59" : "#cbd5e1";
+    const holdStr = contract ? `${contract.amount} RB @ C${contract.target} (${contract.active ? "LOCKED" : "QUEUED"})` : "None (In Coverage)";
+    ctx.fillText(`PPO Hold: ${holdStr}`, hudX + 12, hudY + 52);
+
+    const hoStatus = app.pulse && (visualNow - app.pulse.at < 3200)
+      ? "HO ADMITTED (0ms Drop)"
+      : quality < 0.48 ? "A3 EVENT TRIGGERED" : "SLA SATISFIED";
+    ctx.fillStyle = hoStatus.includes("ADMITTED") ? "#34d399" : hoStatus.includes("TRIGGERED") ? "#fbbf24" : "#94a3b8";
+    ctx.fillText(`Handover: ${hoStatus}  ·  ${focus.allocated}/${focus.demand} RB`, hudX + 12, hudY + 70);
     ctx.restore();
   }
 }

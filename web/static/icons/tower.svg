@@ -1,14 +1,83 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 132" role="img" aria-label="Isometric cell tower">
- <defs><linearGradient id="front" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#48515c"/><stop offset="1" stop-color="#141a21"/></linearGradient><linearGradient id="side" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#7b8590"/><stop offset="1" stop-color="#38414b"/></linearGradient></defs>
- <ellipse cx="61" cy="120" rx="34" ry="7" fill="#cdd3da" opacity=".7"/>
- <path d="M60 17 37 112h14l9-38 9 38h14L60 17Z" fill="url(#front)" stroke="#202833" stroke-width="2"/>
- <path d="M60 17 83 112H69L60 74Z" fill="url(#side)"/>
- <path d="M44 92h32M48 74h24M52 56h16M56 38h8" stroke="#aeb6be" stroke-width="3" stroke-linecap="round"/>
- <path d="M41 109h18l-3 7H35Zm20 0h18l7 7H64Z" fill="#303943"/>
- <path d="M60 10v22" stroke="#252d36" stroke-width="5" stroke-linecap="round"/>
- <path d="M47 22h26" stroke="#252d36" stroke-width="3"/>
- <rect x="41" y="16" width="7" height="15" rx="2" fill="#e7ebee" stroke="#59636d" stroke-width="1.5"/>
- <rect x="72" y="16" width="7" height="15" rx="2" fill="#e7ebee" stroke="#59636d" stroke-width="1.5"/>
- <path d="M58 7h4v8h-4z" fill="#e42b0c"/>
- <path d="M29 20a40 40 0 0 1 0 20M91 20a40 40 0 0 0 0 20" fill="none" stroke="#b9c1c9" stroke-width="2" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 136" role="img" aria-label="5G gNodeB Macro Cell Tower">
+  <defs>
+    <linearGradient id="towerTruss" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#475569"/>
+      <stop offset="50%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="aauPanel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#cbd5e1"/>
+    </linearGradient>
+    <radialGradient id="dishGrad" cx="40%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="80%" stop-color="#94a3b8"/>
+      <stop offset="100%" stop-color="#475569"/>
+    </radialGradient>
+    <radialGradient id="beaconGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ff4444"/>
+      <stop offset="60%" stop-color="#ef4444" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#dc2626" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Ground Foundation Pad -->
+  <ellipse cx="60" cy="126" rx="34" ry="7" fill="#94a3b8" opacity="0.35"/>
+  <polygon points="38,126 82,126 78,122 42,122" fill="#64748b"/>
+
+  <!-- Steel Lattice Mast Legs -->
+  <path d="M 60,26 L 38,122 L 46,122 L 60,48 L 74,122 L 82,122 Z" fill="url(#towerTruss)"/>
+
+  <!-- Cross-Bracing Struts (Lattice Structure) -->
+  <line x1="42" y1="108" x2="78" y2="108" stroke="#94a3b8" stroke-width="2.2" stroke-linecap="round"/>
+  <line x1="42" y1="108" x2="74" y2="88" stroke="#64748b" stroke-width="1.8"/>
+  <line x1="78" y1="108" x2="46" y2="88" stroke="#64748b" stroke-width="1.8"/>
+
+  <line x1="46" y1="88" x2="74" y2="88" stroke="#94a3b8" stroke-width="2.2" stroke-linecap="round"/>
+  <line x1="46" y1="88" x2="70" y2="68" stroke="#64748b" stroke-width="1.8"/>
+  <line x1="74" y1="88" x2="50" y2="68" stroke="#64748b" stroke-width="1.8"/>
+
+  <line x1="50" y1="68" x2="70" y2="68" stroke="#94a3b8" stroke-width="2.2" stroke-linecap="round"/>
+  <line x1="50" y1="68" x2="66" y2="48" stroke="#64748b" stroke-width="1.6"/>
+  <line x1="70" y1="68" x2="54" y2="48" stroke="#64748b" stroke-width="1.6"/>
+
+  <line x1="54" y1="48" x2="66" y2="48" stroke="#94a3b8" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Microwave Backhaul Parabolic Dish (at y = 56) -->
+  <ellipse cx="44" cy="56" rx="9" ry="11" fill="url(#dishGrad)" stroke="#334155" stroke-width="1.2"/>
+  <ellipse cx="43" cy="56" rx="3.5" ry="5" fill="#1e293b"/>
+  <line x1="44" y1="56" x2="53" y2="58" stroke="#334155" stroke-width="2.5"/>
+
+  <!-- Antenna Sector Head Platform -->
+  <rect x="42" y="26" width="36" height="5" rx="1.5" fill="#1e293b"/>
+
+  <!-- 3 Massive MIMO AAU Sector Panels (Active Antenna Units) -->
+  <!-- Left Sector Panel (Angled -30 deg) -->
+  <rect x="37" y="16" width="7" height="19" rx="1.8" fill="url(#aauPanel)" stroke="#334155" stroke-width="1.2"/>
+  <line x1="39" y1="18" x2="39" y2="33" stroke="#94a3b8" stroke-width="0.8"/>
+  <line x1="42" y1="18" x2="42" y2="33" stroke="#94a3b8" stroke-width="0.8"/>
+
+  <!-- Center Sector Panel -->
+  <rect x="56.5" y="14" width="7" height="21" rx="1.8" fill="url(#aauPanel)" stroke="#0f172a" stroke-width="1.4"/>
+  <line x1="58.5" y1="16" x2="58.5" y2="33" stroke="#94a3b8" stroke-width="0.8"/>
+  <line x1="61.5" y1="16" x2="61.5" y2="33" stroke="#94a3b8" stroke-width="0.8"/>
+
+  <!-- Right Sector Panel (Angled +30 deg) -->
+  <rect x="76" y="16" width="7" height="19" rx="1.8" fill="url(#aauPanel)" stroke="#334155" stroke-width="1.2"/>
+  <line x1="78" y1="18" x2="78" y2="33" stroke="#94a3b8" stroke-width="0.8"/>
+  <line x1="81" y1="18" x2="81" y2="33" stroke="#94a3b8" stroke-width="0.8"/>
+
+  <!-- Top Mast Extension & Lightning Rod -->
+  <line x1="60" y1="6" x2="60" y2="14" stroke="#0f172a" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- Red Aviation Obstruction Beacon -->
+  <circle cx="60" cy="5" r="4.5" fill="url(#beaconGlow)"/>
+  <circle cx="60" cy="5" r="2" fill="#ef4444"/>
+  <circle cx="60" cy="5" r="0.8" fill="#fef2f2"/>
+
+  <!-- Sub-6 / mmWave RF Radiation Wave Arcs -->
+  <path d="M 27,15 A 36,36 0 0 0 27,33" fill="none" stroke="#0284c7" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
+  <path d="M 21,10 A 46,46 0 0 0 21,38" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="3,3" stroke-linecap="round" opacity="0.6"/>
+  <path d="M 93,15 A 36,36 0 0 1 93,33" fill="none" stroke="#0284c7" stroke-width="2" stroke-linecap="round" opacity="0.85"/>
+  <path d="M 99,10 A 46,46 0 0 1 99,38" fill="none" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="3,3" stroke-linecap="round" opacity="0.6"/>
 </svg>
