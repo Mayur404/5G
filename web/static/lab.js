@@ -464,13 +464,30 @@ function drawMap(now) {
     ctx.roundRect(barX, barY, barW, barH, 4);
     ctx.fill();
 
-    // Allocated RBs (Deep Slate)
-    const allocW = (barW * cell.allocated) / cell.capacity;
-    if (allocW > 0) {
+    // Sliced allocation segments
+    let currentX = barX;
+    if (cell.slices) {
+      for (const s of cell.slices) {
+        if (s.allocated > 0) {
+          const segW = (barW * s.allocated) / cell.capacity;
+          ctx.fillStyle = s.name.toLowerCase().includes("urllc")
+            ? "#e42b0c"
+            : s.name.toLowerCase().includes("embb")
+            ? "#0284c7"
+            : "#059669";
+          ctx.beginPath();
+          ctx.roundRect(currentX, barY, segW, barH, 2);
+          ctx.fill();
+          currentX += segW;
+        }
+      }
+    } else if (cell.allocated > 0) {
+      const allocW = (barW * cell.allocated) / cell.capacity;
       ctx.fillStyle = "#334155";
       ctx.beginPath();
       ctx.roundRect(barX, barY, allocW, barH, 4);
       ctx.fill();
+      currentX += allocW;
     }
 
     // Held / Reserved RBs (Glowing Vermillion)
@@ -480,9 +497,18 @@ function drawMap(now) {
       ctx.shadowColor = "rgba(234, 88, 12, 0.6)";
       ctx.shadowBlur = 4;
       ctx.beginPath();
-      ctx.roundRect(barX + allocW, barY, heldW, barH, 4);
+      ctx.roundRect(currentX, barY, heldW, barH, 2);
       ctx.fill();
     }
+    ctx.restore();
+
+    // Capacity text label below gauge
+    ctx.save();
+    ctx.font = "800 9px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+    ctx.fillStyle = selected ? "#e42b0c" : "#64748b";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillText(`${cell.allocated + cell.reserved}/${cell.capacity} RB`, x, barY + 11);
     ctx.restore();
   }
 
