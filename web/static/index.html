@@ -181,8 +181,125 @@
           <p id="decisionText">PPO chooses reservation amount and activation time, never the destination tower.</p>
           <div id="decisionFacts" class="decision-facts"></div>
         </section>
+
+        <section class="rail-card event-card">
+          <div class="eyebrow-badge">
+            <span class="badge-dot" aria-hidden="true"></span>
+            <p class="eyebrow">REAL-TIME FLIGHT RECORDER</p>
+          </div>
+          <h2>Handover telemetry log</h2>
+          <div id="liveEventStream" class="event-stream" aria-live="polite">
+            <div class="event-row idle">Waiting for handover activity...</div>
+          </div>
+          <p class="fineprint">Chronological stream of proactive reservations and admission outcomes.</p>
+        </section>
       </aside>
     </section>
+
+    <!-- Real-Time Telemetry & Handover Stats Strip -->
+    <section class="stats-strip" aria-label="Real-time 5G Handover Telemetry">
+      <div class="stat-card">
+        <div class="stat-head">
+          <span class="stat-label">HANDOVER SUCCESS RATE</span>
+          <span id="statHsrDelta" class="stat-delta positive">—</span>
+        </div>
+        <div class="stat-compare">
+          <div class="stat-side baseline">
+            <small>NO RESERVATION</small>
+            <strong id="statHsrNormal">0.0%</strong>
+          </div>
+          <div class="stat-divider" aria-hidden="true">vs</div>
+          <div class="stat-side proposed">
+            <small>PPO PROACTIVE</small>
+            <strong id="statHsrProposed">0.0%</strong>
+          </div>
+        </div>
+        <p class="stat-desc">Target cell admission rate upon boundary crossing</p>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-head">
+          <span class="stat-label">FULL-DEMAND QoS SATISFACTION</span>
+          <span id="statQosDelta" class="stat-delta positive">—</span>
+        </div>
+        <div class="stat-compare">
+          <div class="stat-side baseline">
+            <small>NO RESERVATION</small>
+            <strong id="statQosNormal">0.0%</strong>
+          </div>
+          <div class="stat-divider" aria-hidden="true">vs</div>
+          <div class="stat-side proposed">
+            <small>PPO PROACTIVE</small>
+            <strong id="statQosProposed">0.0%</strong>
+          </div>
+        </div>
+        <p class="stat-desc">Slice throughput & latency SLA fulfilled on arrival</p>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-head">
+          <span class="stat-label">RAN RESOURCE BLOCKS (RBs)</span>
+          <span class="stat-chip" id="statCapacityChip">Pool: 76 RB</span>
+        </div>
+        <div class="stat-metric-row">
+          <div>
+            <span class="metric-num" id="statTotalAlloc">0</span>
+            <small>Active RBs</small>
+          </div>
+          <div>
+            <span class="metric-num highlight" id="statTotalReserved">0</span>
+            <small>PPO Held</small>
+          </div>
+          <div>
+            <span class="metric-num" id="statCellLoad">0%</span>
+            <small>Avg Load</small>
+          </div>
+        </div>
+        <p class="stat-desc">Capacity utilization across the 4 base stations</p>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-head">
+          <span class="stat-label">5G NETWORK SLICE TAXONOMY</span>
+          <span class="stat-chip">3GPP Rel-18</span>
+        </div>
+        <div class="slice-tags">
+          <span class="slice-tag urllc" title="Ultra-Reliable Low-Latency (Autonomous Vehicles)"><i class="dot"></i> uRLLC · Cars</span>
+          <span class="slice-tag embb" title="Enhanced Mobile Broadband (Streaming Drones)"><i class="dot"></i> eMBB · Drones</span>
+          <span class="slice-tag mmtc" title="Massive Machine-Type (Industrial Sensors/Robots)"><i class="dot"></i> mMTC · Robots</span>
+        </div>
+        <p class="stat-desc">Priority isolation prevents eMBB from starving critical cars</p>
+      </div>
+    </section>
+
+    <!-- Visual 5G Handover Slicing Concept Explainer -->
+    <details class="concept-explainer" open>
+      <summary class="explainer-toggle">
+        <div class="explainer-summary-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <strong>How 5G Handover Slicing Works in This Lab</strong>
+          <span class="explainer-pill">Interactive Overview</span>
+        </div>
+        <span class="toggle-text">Toggle guide</span>
+      </summary>
+      <div class="explainer-cards">
+        <div class="concept-card reactive">
+          <div class="concept-badge">1. The Reactive Bottleneck</div>
+          <h3>Why Normal 5G Handovers Drop</h3>
+          <p>A standard 5G network waits until the car actually crosses the cell boundary before requesting radio resources at Tower C0. If Tower C0 is congested with background broadband traffic, only partial capacity (e.g. 3/7 RBs) is available — <strong>Handover fails and the uRLLC link disconnects</strong>.</p>
+        </div>
+        <div class="concept-card predictive">
+          <div class="concept-badge">2. PPO Reinforcement Learning</div>
+          <h3>Anticipating the Crossing</h3>
+          <p>The ProRAN agent monitors vehicle mobility telemetry and distance proxies. Approximately 1.5 seconds before arrival, PPO chooses to issue an <strong>advance reservation contract</strong> for 8 RBs at target Tower C0, protecting critical capacity ahead of time.</p>
+        </div>
+        <div class="concept-card seamless">
+          <div class="concept-badge">3. Zero-Drop Admission</div>
+          <h3>Guaranteed SLA Satisfaction</h3>
+          <p>When the car reaches Tower C0, its 7 RBs are already reserved and instantly allocated. Full throughput is met (7/7 RBs), avoiding radio link failure while releasing unused background blocks immediately back to the pool.</p>
+        </div>
+      </div>
+    </details>
 
     <section class="evidence">
       <div class="evidence-body">

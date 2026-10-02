@@ -430,6 +430,383 @@ main {
   letter-spacing: -0.02em;
 }
 
+/* Real-Time Telemetry Stats Strip */
+.stats-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: all 0.2s ease;
+}
+
+.stat-card:hover {
+  border-color: var(--border-hover);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.stat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.stat-label {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+}
+
+.stat-delta {
+  font-size: 10.5px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+}
+
+.stat-delta.positive {
+  background: rgba(16, 185, 129, 0.1);
+  color: #047857;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.stat-chip {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+}
+
+.stat-compare {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  background: #fafbfc;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+}
+
+.stat-side {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-side small {
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.stat-side strong {
+  font-family: var(--font-mono);
+  font-size: 19px;
+  font-weight: 800;
+  line-height: 1.15;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-side.proposed strong {
+  color: var(--accent-emerald);
+}
+
+.stat-side.baseline strong {
+  color: var(--text-secondary);
+}
+
+.stat-divider {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-subtle);
+  text-transform: lowercase;
+}
+
+.stat-metric-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  background: #fafbfc;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  text-align: center;
+}
+
+.stat-metric-row small {
+  display: block;
+  font-size: 8.5px;
+  font-weight: 750;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.metric-num {
+  font-family: var(--font-mono);
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-num.highlight {
+  color: var(--accent-vermillion);
+}
+
+.slice-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 4px 0;
+}
+
+.slice-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.slice-tag .dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+
+.slice-tag.urllc {
+  background: rgba(228, 43, 12, 0.08);
+  color: #c22409;
+  border: 1px solid rgba(228, 43, 12, 0.2);
+}
+.slice-tag.urllc .dot { background: var(--accent-vermillion); }
+
+.slice-tag.embb {
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+}
+.slice-tag.embb .dot { background: #2563eb; }
+
+.slice-tag.mmtc {
+  background: rgba(5, 150, 105, 0.08);
+  color: #047857;
+  border: 1px solid rgba(5, 150, 105, 0.2);
+}
+.slice-tag.mmtc .dot { background: #059669; }
+
+.stat-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin: 10px 0 0;
+}
+
+/* 5G Handover Concept Explainer */
+.concept-explainer {
+  background: linear-gradient(135deg, rgba(248, 250, 252, 0.98), rgba(241, 245, 249, 0.98));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.concept-explainer[open] {
+  border-color: var(--border-hover);
+}
+
+.explainer-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  background: var(--bg-surface);
+  border-bottom: 1px solid transparent;
+  transition: background 0.15s ease;
+}
+
+.explainer-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.concept-explainer[open] .explainer-toggle {
+  border-bottom-color: var(--border-subtle);
+}
+
+.explainer-toggle:hover {
+  background: #f8fafc;
+}
+
+.explainer-summary-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.explainer-summary-title svg {
+  color: var(--accent-vermillion);
+}
+
+.explainer-pill {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+}
+
+.toggle-text {
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--text-muted);
+}
+
+.explainer-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  padding: 16px 20px 20px;
+}
+
+.concept-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+}
+
+.concept-badge {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+}
+
+.concept-card.reactive .concept-badge {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.concept-card.predictive .concept-badge {
+  background: rgba(245, 158, 11, 0.1);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.concept-card.seamless .concept-badge {
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.concept-card h3 {
+  font-size: 14.5px;
+  font-weight: 750;
+  letter-spacing: -0.015em;
+  margin: 0 0 6px;
+  color: var(--text-primary);
+}
+
+.concept-card p {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* Real-Time Flight Recorder Log Card */
+.event-card h2 {
+  margin-bottom: 10px;
+}
+
+.event-stream {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 175px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.event-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  background: #fafbfc;
+  border: 1px solid var(--border-subtle);
+  line-height: 1.35;
+  transition: all 0.15s ease;
+}
+
+.event-row.success {
+  background: rgba(16, 185, 129, 0.06);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #047857;
+}
+
+.event-row.fail {
+  background: rgba(239, 68, 68, 0.06);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #b91c1c;
+}
+
+.event-row.reserve {
+  background: rgba(245, 158, 11, 0.06);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #b45309;
+}
+
+.event-row.idle {
+  color: var(--text-muted);
+  font-style: italic;
+  font-family: var(--font-sans);
+}
+
 /* Workspace Grid */
 .workspace {
   display: grid;
@@ -1047,6 +1424,12 @@ button:focus-visible, select:focus-visible, canvas:focus-visible, a:focus-visibl
 }
 
 @media (max-width: 1100px) {
+  .stats-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .explainer-cards {
+    grid-template-columns: 1fr;
+  }
   .workspace {
     grid-template-columns: minmax(0, 1fr) 330px;
   }
@@ -1089,6 +1472,9 @@ button:focus-visible, select:focus-visible, canvas:focus-visible, a:focus-visibl
 }
 
 @media (max-width: 620px) {
+  .stats-strip {
+    grid-template-columns: 1fr;
+  }
   .intro h1 {
     font-size: 34px;
   }

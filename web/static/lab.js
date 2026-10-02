@@ -22,6 +22,7 @@ const app = {
   frameStart: performance.now(), pausedProgress: 0, pauseWall: null,
   selectedCell: 0, view: {zoom: 1, cx: 50, cy: 50}, drag: null,
   outcome: null, outcomeStep: null, pulse: null,
+  hover: null, trail: [],
 };
 
 async function requestJSON(url, payload) {
@@ -521,7 +522,35 @@ function drawMap(now) {
     roundedLabel(ctx, "PPO HANDOVER ADMITTED", width / 2, 42, "#047857", "#ffffff", "#10b981");
   }
 
-  // 8. Devices Rendering (Vehicles, Drones, Robots)
+  // 8. Focus Vehicle Breadcrumb Motion Trail
+  if (app.trail && app.trail.length > 1) {
+    ctx.save();
+    ctx.beginPath();
+    for (let i = 0; i < app.trail.length; i++) {
+      const pt = app.trail[i];
+      const sx = p.x(pt.x), sy = p.y(pt.y);
+      if (i === 0) ctx.moveTo(sx, sy);
+      else ctx.lineTo(sx, sy);
+    }
+    ctx.strokeStyle = "rgba(228, 43, 12, 0.35)";
+    ctx.lineWidth = 3;
+    ctx.setLineDash([5, 5]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Small trajectory beads along trail
+    for (let i = 0; i < app.trail.length; i++) {
+      const pt = app.trail[i];
+      const opacity = ((i + 1) / app.trail.length) * 0.45;
+      ctx.fillStyle = `rgba(228, 43, 12, ${opacity})`;
+      ctx.beginPath();
+      ctx.arc(p.x(pt.x), p.y(pt.y), 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // 9. Devices Rendering (Vehicles, Drones, Robots)
   const focusPosition = focus ? pointFor(focus, previous, alpha, p) : null;
   const deviceOrder = [...network.ues].sort((a, b) => Number(a.id === focusId) - Number(b.id === focusId));
 
@@ -537,6 +566,17 @@ function drawMap(now) {
     const radius = focused ? 34 : 18;
 
     ctx.save();
+    // Slice Glow Aura
+    const sliceAura = ue.slice.toLowerCase().includes("urllc")
+      ? "rgba(228, 43, 12, 0.18)"
+      : ue.slice.toLowerCase().includes("embb")
+      ? "rgba(37, 99, 235, 0.16)"
+      : "rgba(5, 150, 105, 0.16)";
+    ctx.fillStyle = sliceAura;
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, radius + 8, 0, Math.PI * 2);
+    ctx.fill();
+
     // Near cell edge warning halo for focus vehicle
     if (focused && quality < 0.48) {
       const pulsePhase = (visualNow * 0.003) % 1;
@@ -618,6 +658,59 @@ function drawMap(now) {
       ctx.fillText(`UE${ue.id}`, pos.x, pos.y + 28);
       ctx.restore();
     }
+  }
+
+  // 10. Interactive Inspection HUD Tooltip on Canvas
+  if (app.hover) {
+    const h = app.hover;
+    const cardW = 248, cardH = 82;
+    const cardX = clamp(h.px + 14, 12, width - cardW - 12);
+    const cardY = clamp(h.py - cardH / 2, 12, height - cardH - 12);
+
+    ctx.save();
+    ctx.shadowColor = "rgba(15, 23, 42, 0.28)";
+    ctx.shadowBlur = 16;
+    ctx.shadowOffsetY = 4;
+    ctx.fillStyle = "rgba(15, 23, 42, 0.94)";
+    ctx.beginPath();
+    ctx.roundRect(cardX, cardY, cardW, cardH, 9);
+    ctx.fill();
+
+    ctx.shadowColor = "transparent";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.16)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+
+    if (h.type === "ue") {
+      const ue = h.data;
+      const isUrllc = ue.slice.toLowerCase().includes("urllc");
+      ctx.font = "800 11.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+      ctx.fillStyle = isUrllc ? "#ff7a59" : "#38bdf8";
+      ctx.fillText(`UE${ue.id} · ${ue.slice.toUpperCase()} (${ue.entity_type.toUpperCase()})`, cardX + 12, cardY + 18);
+
+      ctx.font = "600 10.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+      ctx.fillStyle = "#f1f5f9";
+      ctx.fillText(`Serving: Tower C${ue.cell}  ·  RSRP: ${Math.round(ue.signal_quality * 100)}%`, cardX + 12, cardY + 39);
+
+      ctx.fillStyle = "#94a3b8";
+      ctx.fillText(`Demand: ${ue.demand} RB  ·  Alloc: ${ue.allocated} RB  ·  ${ue.speed.toFixed(1)}m/s`, cardX + 12, cardY + 60);
+    } else if (h.type === "cell") {
+      const cell = h.data;
+      ctx.font = "800 11.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+      ctx.fillStyle = "#f8fafc";
+      ctx.fillText(`BASE STATION TOWER C${cell.id}`, cardX + 12, cardY + 18);
+
+      ctx.font = "600 10.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+      ctx.fillStyle = "#f1f5f9";
+      ctx.fillText(`Capacity: ${cell.capacity} RB  (${cell.allocated} used, ${cell.reserved} held)`, cardX + 12, cardY + 39);
+
+      ctx.fillStyle = "#94a3b8";
+      ctx.fillText(`Load: ${Math.round(cell.load * 100)}%  ·  Free: ${cell.free} RB (Click to inspect)`, cardX + 12, cardY + 60);
+    }
+    ctx.restore();
   }
 }
 
@@ -791,6 +884,58 @@ function updateTeaching(snapshot) {
       facts.append(chip);
     }
   }
+
+  // Update Real-Time Telemetry Stats Strip
+  const nMetrics = normal.metrics, pMetrics = proposed.metrics;
+  const nHsr = nMetrics.handovers > 0 ? (nMetrics.successes / nMetrics.handovers * 100) : 0;
+  const pHsr = pMetrics.handovers > 0 ? (pMetrics.successes / pMetrics.handovers * 100) : 0;
+  setText("statHsrNormal", `${nHsr.toFixed(1)}%`);
+  setText("statHsrProposed", `${pHsr.toFixed(1)}%`);
+  const hsrDelta = pHsr - nHsr;
+  setText("statHsrDelta", `${hsrDelta >= 0 ? "+" : ""}${hsrDelta.toFixed(1)} pp`);
+
+  const nQos = nMetrics.qos_rate != null ? nMetrics.qos_rate * 100 : (nMetrics.handovers > 0 ? (nMetrics.qos_successes / nMetrics.handovers * 100) : 0);
+  const pQos = pMetrics.qos_rate != null ? pMetrics.qos_rate * 100 : (pMetrics.handovers > 0 ? (pMetrics.qos_successes / pMetrics.handovers * 100) : 0);
+  setText("statQosNormal", `${nQos.toFixed(1)}%`);
+  setText("statQosProposed", `${pQos.toFixed(1)}%`);
+  const qosDelta = pQos - nQos;
+  setText("statQosDelta", `${qosDelta >= 0 ? "+" : ""}${qosDelta.toFixed(1)} pp`);
+
+  const totalAlloc = proposed.cells.reduce((sum, c) => sum + c.allocated, 0);
+  const totalHeld = proposed.cells.reduce((sum, c) => sum + c.reserved, 0);
+  const totalCap = proposed.cells.reduce((sum, c) => sum + c.capacity, 0);
+  const avgLoad = totalCap > 0 ? Math.round(((totalAlloc + totalHeld) / totalCap) * 100) : 0;
+
+  setText("statTotalAlloc", `${totalAlloc} RB`);
+  setText("statTotalReserved", `${totalHeld} RB held`);
+  setText("statCellLoad", `${avgLoad}%`);
+  setText("statCapacityChip", `Pool: ${totalCap} RB`);
+
+  // Update Live Flight Recorder Event Stream
+  const stream = $("liveEventStream");
+  if (stream) {
+    const rawEvents = [];
+    if (proposed.events) {
+      for (const ev of proposed.events) rawEvents.push({text: ev, net: "PPO"});
+    }
+    if (normal.events) {
+      for (const ev of normal.events) {
+        if (ev.startsWith("HO ")) rawEvents.push({text: ev, net: "Baseline"});
+      }
+    }
+    if (rawEvents.length > 0) {
+      stream.replaceChildren();
+      for (const item of rawEvents.slice(-6).reverse()) {
+        const row = document.createElement("div");
+        row.className = "event-row";
+        if (item.text.includes("SUCCESS")) row.classList.add("success");
+        else if (item.text.includes("FAIL")) row.classList.add("fail");
+        else if (item.text.includes("reserve")) row.classList.add("reserve");
+        row.textContent = `[${snapshot.proposed.time.toFixed(1)}s] ${item.net}: ${item.text}`;
+        stream.append(row);
+      }
+    }
+  }
 }
 
 function acceptSnapshot(snapshot) {
@@ -798,6 +943,13 @@ function acceptSnapshot(snapshot) {
   app.snapshot = snapshot;
   app.frameStart = performance.now();
   setText("simTime", `${snapshot.proposed.time.toFixed(1)} s`);
+
+  const focus = snapshot.proposed.ues.find(u => u.id === snapshot.focus_id);
+  if (focus) {
+    app.trail.push({x: focus.x, y: focus.y});
+    if (app.trail.length > 25) app.trail.shift();
+  }
+
   updateTeaching(snapshot);
   renderTower();
 }
@@ -832,6 +984,8 @@ async function startScenario() {
   app.outcome = null;
   app.outcomeStep = null;
   app.pulse = null;
+  app.trail = [];
+  app.hover = null;
   app.view = {zoom: 1, cx: 50, cy: 50};
   app.selectedCell = 0;
   clampView();
@@ -902,17 +1056,48 @@ function setupMapInteractions() {
   });
 
   canvas.addEventListener("pointermove", event => {
-    if (!app.drag) return;
-    const dx = event.clientX - app.drag.x;
-    const dy = event.clientY - app.drag.y;
-    if (Math.abs(dx) + Math.abs(dy) > 3) app.drag.moved = true;
     const rect = canvas.getBoundingClientRect();
     const p = projection(rect.width, rect.height);
-    app.view.cx -= (dx * 100) / p.side;
-    app.view.cy -= (dy * 100) / p.side;
-    clampView();
-    app.drag.x = event.clientX;
-    app.drag.y = event.clientY;
+    const mx = event.clientX - rect.left;
+    const my = event.clientY - rect.top;
+
+    if (app.drag) {
+      const dx = event.clientX - app.drag.x;
+      const dy = event.clientY - app.drag.y;
+      if (Math.abs(dx) + Math.abs(dy) > 3) app.drag.moved = true;
+      app.view.cx -= (dx * 100) / p.side;
+      app.view.cy -= (dy * 100) / p.side;
+      clampView();
+      app.drag.x = event.clientX;
+      app.drag.y = event.clientY;
+      app.hover = null;
+      return;
+    }
+
+    if (!app.snapshot) return;
+    const network = app.snapshot.proposed;
+    let found = null;
+    for (const ue of network.ues) {
+      const px = p.x(ue.x), py = p.y(ue.y);
+      if (Math.hypot(px - mx, py - my) < 28) {
+        found = {type: "ue", data: ue, px: mx, py: my};
+        break;
+      }
+    }
+    if (!found) {
+      for (const cell of network.cells) {
+        const cx = p.x(cell.x), cy = p.y(cell.y);
+        if (Math.hypot(cx - mx, cy - my) < 55) {
+          found = {type: "cell", data: cell, px: mx, py: my};
+          break;
+        }
+      }
+    }
+    app.hover = found;
+  });
+
+  canvas.addEventListener("pointerleave", () => {
+    app.hover = null;
   });
 
   canvas.addEventListener("pointerup", event => {
