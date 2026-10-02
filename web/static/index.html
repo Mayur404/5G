@@ -214,6 +214,17 @@
             <strong id="statHsrProposed">0.0%</strong>
           </div>
         </div>
+        <div class="sparkline-wrap" title="Rolling trend over past simulation steps: PPO (emerald) vs Baseline (dashed gray)">
+          <svg id="hsrSparkline" class="sparkline-svg" viewBox="0 0 180 32" preserveAspectRatio="none" aria-hidden="true">
+            <line class="spark-grid" x1="0" y1="16" x2="180" y2="16" />
+            <path id="hsrSparkNormal" class="spark-line normal" d="M0,32 L180,32" />
+            <path id="hsrSparkProposed" class="spark-line proposed" d="M0,32 L180,32" />
+          </svg>
+          <div class="spark-legend">
+            <span class="spark-key normal">Baseline</span>
+            <span class="spark-key proposed">PPO</span>
+          </div>
+        </div>
         <p class="stat-desc">Target cell admission rate upon boundary crossing</p>
       </div>
 
@@ -231,6 +242,17 @@
           <div class="stat-side proposed">
             <small>PPO PROACTIVE</small>
             <strong id="statQosProposed">0.0%</strong>
+          </div>
+        </div>
+        <div class="sparkline-wrap" title="Rolling QoS fulfillment rate: PPO (emerald) vs Baseline (dashed gray)">
+          <svg id="qosSparkline" class="sparkline-svg" viewBox="0 0 180 32" preserveAspectRatio="none" aria-hidden="true">
+            <line class="spark-grid" x1="0" y1="16" x2="180" y2="16" />
+            <path id="qosSparkNormal" class="spark-line normal" d="M0,32 L180,32" />
+            <path id="qosSparkProposed" class="spark-line proposed" d="M0,32 L180,32" />
+          </svg>
+          <div class="spark-legend">
+            <span class="spark-key normal">Baseline</span>
+            <span class="spark-key proposed">PPO</span>
           </div>
         </div>
         <p class="stat-desc">Slice throughput & latency SLA fulfilled on arrival</p>
@@ -297,6 +319,11 @@
           <div class="concept-badge">3. Zero-Drop Admission</div>
           <h3>Guaranteed SLA Satisfaction</h3>
           <p>When the car reaches Tower C0, its 7 RBs are already reserved and instantly allocated. Full throughput is met (7/7 RBs), avoiding radio link failure while releasing unused background blocks immediately back to the pool.</p>
+        </div>
+        <div class="concept-card slicing">
+          <div class="concept-badge">4. Slicing & Priority Isolation</div>
+          <h3>Guaranteed SLA Compliance</h3>
+          <p>Each tower pool (18–20 RBs) dynamically isolates high-bandwidth eMBB drones from latency-sensitive uRLLC cars. Proactive holds safely yield background broadband blocks, guaranteeing zero drops on critical vehicle telemetry.</p>
         </div>
       </div>
     </details>

@@ -22,7 +22,7 @@ const app = {
   frameStart: performance.now(), pausedProgress: 0, pauseWall: null,
   selectedCell: 0, view: {zoom: 1, cx: 50, cy: 50}, drag: null,
   outcome: null, outcomeStep: null, pulse: null,
-  hover: null, trail: [],
+  hover: null, trail: [], sliceHighlight: null,
 };
 
 async function requestJSON(url, payload) {
@@ -566,6 +566,16 @@ function drawMap(now) {
     const radius = focused ? 34 : 18;
 
     ctx.save();
+    if (app.sliceHighlight) {
+      const match = ue.slice.toLowerCase().includes(app.sliceHighlight);
+      if (!match) {
+        ctx.globalAlpha = 0.22;
+      } else {
+        ctx.shadowColor = "#38bdf8";
+        ctx.shadowBlur = 14;
+      }
+    }
+
     // Slice Glow Aura
     const sliceAura = ue.slice.toLowerCase().includes("urllc")
       ? "rgba(228, 43, 12, 0.18)"
@@ -695,8 +705,9 @@ function drawMap(now) {
       ctx.fillStyle = "#f1f5f9";
       ctx.fillText(`Serving: Tower C${ue.cell}  ·  RSRP: ${Math.round(ue.signal_quality * 100)}%`, cardX + 12, cardY + 39);
 
-      ctx.fillStyle = "#94a3b8";
-      ctx.fillText(`Demand: ${ue.demand} RB  ·  Alloc: ${ue.allocated} RB  ·  ${ue.speed.toFixed(1)}m/s`, cardX + 12, cardY + 60);
+      const qosMet = ue.allocated >= ue.demand;
+      ctx.fillStyle = qosMet ? "#34d399" : "#fbbf24";
+      ctx.fillText(`Demand: ${ue.demand} RB · Alloc: ${ue.allocated} RB (${qosMet ? "SLA Met" : "Degraded"}) · ${ue.speed.toFixed(1)}m/s`, cardX + 12, cardY + 60);
     } else if (h.type === "cell") {
       const cell = h.data;
       ctx.font = "800 11.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
@@ -705,10 +716,11 @@ function drawMap(now) {
 
       ctx.font = "600 10.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
       ctx.fillStyle = "#f1f5f9";
-      ctx.fillText(`Capacity: ${cell.capacity} RB  (${cell.allocated} used, ${cell.reserved} held)`, cardX + 12, cardY + 39);
+      ctx.fillText(`Capacity: ${cell.capacity} RB  (${cell.allocated} used, ${cell.reserved} held, ${cell.free} free)`, cardX + 12, cardY + 39);
 
       ctx.fillStyle = "#94a3b8";
-      ctx.fillText(`Load: ${Math.round(cell.load * 100)}%  ·  Free: ${cell.free} RB (Click to inspect)`, cardX + 12, cardY + 60);
+      const sSum = cell.slices.map(s => `${s.name.slice(0, 4)}: ${s.allocated}RB`).join(" · ");
+      ctx.fillText(`Load: ${Math.round(cell.load * 100)}%  ·  ${sSum}`, cardX + 12, cardY + 60);
     }
     ctx.restore();
   }
@@ -743,13 +755,69 @@ function renderTower() {
 
     const bar = document.createElement("div");
     bar.className = "capacity-bar";
-    for (const [kind, value] of [["allocated", cell.allocated], ["held", cell.reserved]]) {
+    let hasSliceAlloc = false;
+    for (const s of cell.slices) {
+      if (s.allocated > 0) {
+        hasSliceAlloc = true;
+        const part = document.createElement("i");
+        part.className = `allocated slice-${s.name.toLowerCase()}`;
+        part.style.width = `${(100 * s.allocated) / cell.capacity}%`;
+        part.title = `${s.name}: ${s.allocated} RB allocated`;
+        bar.append(part);
+      }
+    }
+    if (!hasSliceAlloc && cell.allocated > 0) {
       const part = document.createElement("i");
-      part.className = kind;
-      part.style.width = `${(100 * value) / cell.capacity}%`;
+      part.className = "allocated";
+      part.style.width = `${(100 * cell.allocated) / cell.capacity}%`;
+      bar.append(part);
+    }
+    if (cell.reserved > 0) {
+      const part = document.createElement("i");
+      part.className = "held";
+      part.style.width = `${(100 * cell.reserved) / cell.capacity}%`;
+      part.title = `PPO Held: ${cell.reserved} RB`;
       bar.append(part);
     }
     root.append(bar);
+
+    const sliceGrid = document.createElement("div");
+    sliceGrid.className = "ledger-slice-grid";
+    for (const s of cell.slices) {
+      const item = document.createElement("div");
+      item.className = "ledger-slice-item";
+      const sKey = s.name.toLowerCase();
+
+      const hdr = document.createElement("div");
+      hdr.className = "slice-item-header";
+      const nameSpan = document.createElement("span");
+      nameSpan.className = `slice-item-name ${sKey}`;
+      const dot = document.createElement("i");
+      dot.className = "slice-item-dot";
+      nameSpan.append(dot, document.createTextNode(" " + s.name));
+      const uesSpan = document.createElement("span");
+      uesSpan.className = "slice-item-sla";
+      uesSpan.textContent = `${s.ues} UE${s.ues === 1 ? "" : "s"}`;
+      hdr.append(nameSpan, uesSpan);
+
+      const rbsDiv = document.createElement("div");
+      rbsDiv.className = "slice-item-rbs";
+      rbsDiv.textContent = `${s.allocated}/${s.demand} RB`;
+      if (s.reserved > 0) {
+        const heldTag = document.createElement("span");
+        heldTag.className = "held-tag";
+        heldTag.textContent = `+${s.reserved} held`;
+        rbsDiv.append(heldTag);
+      }
+
+      const slaDiv = document.createElement("div");
+      slaDiv.className = "slice-item-sla";
+      slaDiv.textContent = `SLA: ${s.sla_rbs_per_ue} RB/UE · <${s.latency_max_ms}ms`;
+
+      item.append(hdr, rbsDiv, slaDiv);
+      sliceGrid.append(item);
+    }
+    root.append(sliceGrid);
 
     const slices = document.createElement("div");
     slices.className = "ledger-slices";
@@ -764,6 +832,37 @@ function renderTower() {
     const selected = Number(button.dataset.cell) === cellId;
     button.classList.toggle("active", selected);
     button.setAttribute("aria-pressed", String(selected));
+  }
+}
+
+function buildSparklinePath(historyList, key, width = 180, height = 32, padY = 2) {
+  if (!historyList || historyList.length < 2) {
+    return `M 0,${height - padY} L ${width},${height - padY}`;
+  }
+  const n = historyList.length;
+  const usableH = height - padY * 2;
+  const points = historyList.map((item, idx) => {
+    const x = (idx / (n - 1)) * width;
+    const val = clamp(item[key] ?? 0, 0, 1);
+    const y = (height - padY) - val * usableH;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  return `M ${points.join(" L ")}`;
+}
+
+function updateSparklines(history) {
+  if (!history) return;
+  const w = 180, h = 32;
+  const nHsr = $("hsrSparkNormal"), pHsr = $("hsrSparkProposed");
+  const nQos = $("qosSparkNormal"), pQos = $("qosSparkProposed");
+
+  if (nHsr && pHsr && history.normal && history.proposed) {
+    nHsr.setAttribute("d", buildSparklinePath(history.normal, "hsr", w, h));
+    pHsr.setAttribute("d", buildSparklinePath(history.proposed, "hsr", w, h));
+  }
+  if (nQos && pQos && history.normal && history.proposed) {
+    nQos.setAttribute("d", buildSparklinePath(history.normal, "qos", w, h));
+    pQos.setAttribute("d", buildSparklinePath(history.proposed, "qos", w, h));
   }
 }
 
@@ -936,6 +1035,9 @@ function updateTeaching(snapshot) {
       }
     }
   }
+
+  // Update Rolling Sparklines
+  updateSparklines(snapshot.history);
 }
 
 function acceptSnapshot(snapshot) {
@@ -998,6 +1100,15 @@ async function startScenario() {
   const scenario = $("scenario").value;
   const preset = app.scenarios?.[scenario];
   setText("scenarioDescription", preset?.description || "");
+
+  const stream = $("liveEventStream");
+  if (stream) {
+    stream.replaceChildren();
+    const initRow = document.createElement("div");
+    initRow.className = "event-row idle";
+    initRow.textContent = `Scenario "${scenario}" initialized. Awaiting handover telemetry...`;
+    stream.append(initRow);
+  }
 
   try {
     const response = await requestJSON("/api/session", {scenario, seed: preset?.seed ?? 21});
@@ -1140,6 +1251,20 @@ async function init() {
   setupMapInteractions();
   $("playBtn").addEventListener("click", togglePlayback);
   $("scenario").addEventListener("change", startScenario);
+
+  // Interactive Slice Spotlight
+  const sliceTags = document.querySelectorAll(".slice-tags .slice-tag");
+  sliceTags.forEach(tag => {
+    let sliceKey = null;
+    if (tag.classList.contains("urllc")) sliceKey = "urllc";
+    else if (tag.classList.contains("embb")) sliceKey = "embb";
+    else if (tag.classList.contains("mmtc")) sliceKey = "mmtc";
+
+    tag.style.cursor = "pointer";
+    tag.addEventListener("pointerenter", () => { app.sliceHighlight = sliceKey; });
+    tag.addEventListener("pointerleave", () => { app.sliceHighlight = null; });
+  });
+
   requestAnimationFrame(frame);
 
   try {
