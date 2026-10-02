@@ -294,6 +294,57 @@
       </div>
     </section>
 
+    <!-- 7-Stage End-to-End Handover Pipeline (text2.txt Architecture) -->
+    <section class="pipeline-card" aria-label="5G Handover Decision Pipeline">
+      <div class="pipeline-header">
+        <div class="pipeline-title-group">
+          <div class="eyebrow-badge">
+            <span class="badge-dot" aria-hidden="true"></span>
+            <p class="eyebrow">RESEARCH ARCHITECTURE · TEXT2.TXT PIPELINE</p>
+          </div>
+          <h3>7-Stage Closed-Loop Predictive Handover Sequence</h3>
+        </div>
+        <p class="pipeline-desc">Real-time mapping of UE mobility through PPO observation, masked reservation action, target admission, and SLA reward feedback.</p>
+      </div>
+      <div class="pipeline-flow" id="pipelineFlow">
+        <div class="pipe-node active" id="pipeMobility" data-stage="0">
+          <span class="pipe-num">01</span>
+          <span class="pipe-label">Mobility</span>
+          <small class="pipe-sub">Telemetry &amp; Velocity</small>
+        </div>
+        <div class="pipe-node" id="pipePrediction" data-stage="1">
+          <span class="pipe-num">02</span>
+          <span class="pipe-label">Prediction</span>
+          <small class="pipe-sub">Target &amp; Arrival</small>
+        </div>
+        <div class="pipe-node" id="pipeUncertainty" data-stage="2">
+          <span class="pipe-num">03</span>
+          <span class="pipe-label">Uncertainty</span>
+          <small class="pipe-sub">Distance Proxy</small>
+        </div>
+        <div class="pipe-node" id="pipePpo" data-stage="3">
+          <span class="pipe-num">04</span>
+          <span class="pipe-label">PPO Decision</span>
+          <small class="pipe-sub">Action [b, q, d]</small>
+        </div>
+        <div class="pipe-node" id="pipeReservation" data-stage="4">
+          <span class="pipe-num">05</span>
+          <span class="pipe-label">Reservation</span>
+          <small class="pipe-sub">Capacity Contract</small>
+        </div>
+        <div class="pipe-node" id="pipeHandover" data-stage="5">
+          <span class="pipe-num">06</span>
+          <span class="pipe-label">Handover</span>
+          <small class="pipe-sub">Cell Admission</small>
+        </div>
+        <div class="pipe-node" id="pipeFeedback" data-stage="6">
+          <span class="pipe-num">07</span>
+          <span class="pipe-label">Feedback</span>
+          <small class="pipe-sub">QoS Reward (Eq. 34)</small>
+        </div>
+      </div>
+    </section>
+
     <!-- Visual 5G Handover Slicing Concept Explainer -->
     <details class="concept-explainer" open>
       <summary class="explainer-toggle">
@@ -321,9 +372,55 @@
           <p>When the car reaches Tower C0, its 7 RBs are already reserved and instantly allocated. Full throughput is met (7/7 RBs), avoiding radio link failure while releasing unused background blocks immediately back to the pool.</p>
         </div>
         <div class="concept-card slicing">
-          <div class="concept-badge">4. Slicing & Priority Isolation</div>
+          <div class="concept-badge">4. Slicing &amp; Priority Isolation</div>
           <h3>Guaranteed SLA Compliance</h3>
           <p>Each tower pool (18–20 RBs) dynamically isolates high-bandwidth eMBB drones from latency-sensitive uRLLC cars. Proactive holds safely yield background broadband blocks, guaranteeing zero drops on critical vehicle telemetry.</p>
+        </div>
+      </div>
+    </details>
+
+    <!-- Research Mathematics Verification Drawer -->
+    <details class="concept-explainer math-drawer">
+      <summary class="explainer-toggle">
+        <div class="explainer-summary-title">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          <strong>Research Mathematics &amp; Formulation Provenance</strong>
+          <span class="explainer-pill">PROJECT_EQUATIONS.md · text1 · text2 · PreNS PDF</span>
+        </div>
+        <span class="toggle-text">Toggle equations</span>
+      </summary>
+      <div class="math-grid">
+        <div class="math-card">
+          <div class="math-head">
+            <span class="math-eq-tag">Eq. (1) &amp; (2)</span>
+            <strong>Capacity &amp; Free RB Invariant</strong>
+          </div>
+          <p class="math-formula">A_{j,t} + \sum_i B_{i,j,t} \le K_j \quad\implies\quad F_{j,t} = K_j - A_{j,t} - \sum_i B_{i,j,t} \ge 0</p>
+          <p class="math-desc">Conserves cell capacity \(K_j\); active allocations \(A\) plus PPO reservations \(B\) never exceed total tower budget.</p>
+        </div>
+        <div class="math-card">
+          <div class="math-head">
+            <span class="math-eq-tag">Eq. (18) – (20)</span>
+            <strong>Action Admissibility Bounds</strong>
+          </div>
+          <p class="math-formula">a_{i,j,t} = (b, q, d), \quad 0 \le d \le \hat h_{i,j,t} - t, \quad 1 \le q \le \hat D_{i,j,t}</p>
+          <p class="math-desc">Reservation cannot exceed predicted demand and must activate before predicted crossing interval \(\hat h\).</p>
+        </div>
+        <div class="math-card">
+          <div class="math-head">
+            <span class="math-eq-tag">Eq. (22)</span>
+            <strong>Handover Accounting &amp; Waste</strong>
+          </div>
+          <p class="math-formula">U_i^{\rm used} = Y_i^{\rm HO}\min(D_i, B_i^{\rm live}), \quad U_i^{\rm unused} = B_i^{\rm live} - U_i^{\rm used}</p>
+          <p class="math-desc">A failed handover uses 0 reserved RBs; unused activated reservations are penalized as waste \(w_t\).</p>
+        </div>
+        <div class="math-card">
+          <div class="math-head">
+            <span class="math-eq-tag">Eq. (34)</span>
+            <strong>Linear PPO Scalarized Reward</strong>
+          </div>
+          <p class="math-formula">r_t = \alpha h_t + \beta q_t - \gamma w_t - \delta c_t \quad (\alpha=2.0, \beta=3.0, \gamma=1.5, \delta=0.25)</p>
+          <p class="math-desc">Directly trades off handover reliability \(h\) and QoS satisfaction \(q\) against reservation waste \(w\) and occupancy \(c\).</p>
         </div>
       </div>
     </details>

@@ -240,6 +240,12 @@ function drawMap(now) {
   ctx.stroke();
   ctx.setLineDash([]);
 
+  // Boundary corridor band at y = 50
+  ctx.save();
+  ctx.fillStyle = "rgba(226, 232, 240, 0.4)";
+  ctx.fillRect(p.x(0), p.y(54), p.side, p.y(46) - p.y(54));
+  ctx.restore();
+
   // Boundary Labels
   ctx.font = "800 9.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
   ctx.fillStyle = "#64748b";
@@ -248,7 +254,7 @@ function drawMap(now) {
   ctx.fillText("CELL BOUNDARY · HANDOVER FRONTIER", p.x(50), p.y(50) - 7);
   ctx.restore();
 
-  // 2. Translucent RF Coverage Contour Rings from each cell tower
+  // 2. Translucent RF Coverage Contour Rings & Dynamic Waves from each cell tower
   for (const cell of network.cells) {
     const cx = p.x(cell.x), cy = p.y(cell.y);
     const r1 = p.side * 0.18, r2 = p.side * 0.32, r3 = p.side * 0.46;
@@ -266,6 +272,16 @@ function drawMap(now) {
     ctx.setLineDash([4, 6]);
     ctx.beginPath();
     ctx.arc(cx, cy, r3, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Dynamic RF propagation ripple wave
+    const waveProgress = (visualNow * 0.00045 + cell.id * 0.25) % 1;
+    const waveR = p.side * (0.05 + 0.40 * waveProgress);
+    ctx.strokeStyle = `rgba(14, 165, 233, ${0.2 * (1 - waveProgress)})`;
+    ctx.lineWidth = 1.4;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.arc(cx, cy, waveR, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
   }
@@ -292,18 +308,22 @@ function drawMap(now) {
     const cell = network.cells[focus.cell];
     const sx = p.x(cell.x), sy = p.y(cell.y);
     const connected = focus.allocated > 0;
+    const prior = previous?.ues.find(item => item.id === focus.id) || focus;
+    const quality = prior.signal_quality + (focus.signal_quality - prior.signal_quality) * alpha;
 
     ctx.save();
-    // Carrier beam outer glow
-    ctx.strokeStyle = connected ? "rgba(2, 132, 199, 0.2)" : "rgba(239, 68, 68, 0.2)";
-    ctx.lineWidth = 9;
+    // Quality-adaptive beam coloration: cyan for high SINR proxy, amber when approaching boundary
+    const beamColor = quality < 0.48 ? "#f59e0b" : "#0284c7";
+    const beamGlow = quality < 0.48 ? "rgba(245, 158, 11, 0.25)" : "rgba(2, 132, 199, 0.22)";
+
+    ctx.strokeStyle = connected ? beamGlow : "rgba(239, 68, 68, 0.2)";
+    ctx.lineWidth = 10;
     ctx.beginPath();
     ctx.moveTo(sx, sy);
     ctx.lineTo(pos.x, pos.y);
     ctx.stroke();
 
-    // Carrier beam core
-    ctx.strokeStyle = connected ? "#0284c7" : "#ef4444";
+    ctx.strokeStyle = connected ? beamColor : "#ef4444";
     ctx.lineWidth = 3.5;
     ctx.setLineDash(connected ? [] : [7, 6]);
     ctx.beginPath();
@@ -314,13 +334,13 @@ function drawMap(now) {
 
     // Flowing Data Packets
     if (connected) {
-      for (let packet = 0; packet < 3; packet++) {
-        const fraction = (visualNow * 0.00038 + packet * 0.33) % 1;
+      for (let packet = 0; packet < 4; packet++) {
+        const fraction = (visualNow * 0.00042 + packet * 0.25) % 1;
         const px = sx + (pos.x - sx) * fraction;
         const py = sy + (pos.y - sy) * fraction;
         ctx.save();
-        ctx.fillStyle = "#0284c7";
-        ctx.shadowColor = "rgba(2, 132, 199, 0.6)";
+        ctx.fillStyle = beamColor;
+        ctx.shadowColor = beamColor;
         ctx.shadowBlur = 6;
         ctx.beginPath();
         ctx.arc(px, py, 4, 0, Math.PI * 2);
@@ -359,23 +379,25 @@ function drawMap(now) {
     ctx.stroke();
     ctx.restore();
 
-    // Animated transmission particle along curve
-    const tFrac = (visualNow * 0.00045) % 1;
-    const p1x = (1 - tFrac) * pos.x + tFrac * midX;
-    const p1y = (1 - tFrac) * pos.y + tFrac * midY;
-    const p2x = (1 - tFrac) * midX + tFrac * tx;
-    const p2y = (1 - tFrac) * midY + tFrac * ty;
-    const qx = (1 - tFrac) * p1x + tFrac * p2x;
-    const qy = (1 - tFrac) * p1y + tFrac * p2y;
+    // Animated transmission particle stream along reservation curve
+    for (let pIdx = 0; pIdx < 2; pIdx++) {
+      const tFrac = ((visualNow * 0.00045) + pIdx * 0.5) % 1;
+      const p1x = (1 - tFrac) * pos.x + tFrac * midX;
+      const p1y = (1 - tFrac) * pos.y + tFrac * midY;
+      const p2x = (1 - tFrac) * midX + tFrac * tx;
+      const p2y = (1 - tFrac) * midY + tFrac * ty;
+      const qx = (1 - tFrac) * p1x + tFrac * p2x;
+      const qy = (1 - tFrac) * p1y + tFrac * p2y;
 
-    ctx.save();
-    ctx.fillStyle = active ? "#e42b0c" : "#f59e0b";
-    ctx.shadowColor = active ? "rgba(228, 43, 12, 0.8)" : "rgba(245, 158, 11, 0.8)";
-    ctx.shadowBlur = 8;
-    ctx.beginPath();
-    ctx.arc(qx, qy, 4.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+      ctx.save();
+      ctx.fillStyle = active ? "#e42b0c" : "#f59e0b";
+      ctx.shadowColor = active ? "rgba(228, 43, 12, 0.85)" : "rgba(245, 158, 11, 0.85)";
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.arc(qx, qy, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
 
     // Floating Badge for Reservation
     const badgeX = tx < width / 2 ? tx + 115 : tx - 115;
@@ -963,6 +985,27 @@ function updateTeaching(snapshot) {
   const dots = document.querySelectorAll(".step-dots .dot");
   dots.forEach((dot, idx) => {
     dot.classList.toggle("active", idx === stepIndex);
+  });
+
+  // Update 7-Stage text2.txt Pipeline Nodes
+  const pipeNodes = document.querySelectorAll(".pipeline-flow .pipe-node");
+  pipeNodes.forEach((node, idx) => {
+    let isActive = false, isCompleted = false;
+    if (stepIndex === 0) { // 01 APPROACH
+      isActive = idx === 0 || idx === 1;
+      isCompleted = false;
+    } else if (stepIndex === 1) { // 02 FORECAST & REQUEST
+      isActive = idx === 2 || idx === 3;
+      isCompleted = idx < 2;
+    } else if (stepIndex === 2) { // 03 CAPACITY HELD
+      isActive = idx === 4;
+      isCompleted = idx < 4;
+    } else if (stepIndex === 3) { // 04 HANDOVER RESULT
+      isActive = idx === 5 || idx === 6;
+      isCompleted = idx < 5;
+    }
+    node.classList.toggle("active", isActive);
+    node.classList.toggle("completed", isCompleted);
   });
 
   for (const name of ["normal", "proposed"]) {

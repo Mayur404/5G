@@ -854,6 +854,207 @@ main {
   margin: 0;
 }
 
+/* 7-Stage End-to-End Pipeline Card (text2.txt Architecture) */
+.pipeline-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 18px 22px 20px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+}
+
+.pipeline-card:hover {
+  border-color: var(--border-hover);
+  box-shadow: var(--shadow-md);
+}
+
+.pipeline-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.pipeline-title-group h3 {
+  font-size: 17px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  margin: 2px 0 0;
+  color: var(--text-primary);
+}
+
+.pipeline-desc {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-muted);
+  max-width: 580px;
+  margin: 0;
+}
+
+.pipeline-flow {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  padding: 4px 0 6px;
+}
+
+@media (max-width: 1024px) {
+  .pipeline-flow {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .pipeline-flow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.pipe-node {
+  background: #fafbfc;
+  border: 1.5px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.pipe-node .pipe-num {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.pipe-node .pipe-label {
+  font-size: 11.5px;
+  font-weight: 750;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pipe-node .pipe-sub {
+  font-size: 8.5px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pipe-node.active {
+  background: #ffffff;
+  border-color: var(--accent-vermillion);
+  box-shadow: 0 0 0 1px var(--accent-vermillion), 0 4px 12px rgba(228, 43, 12, 0.12);
+  transform: translateY(-2px);
+}
+
+.pipe-node.active .pipe-num {
+  color: var(--accent-vermillion);
+}
+
+.pipe-node.active .pipe-label {
+  color: var(--accent-vermillion);
+}
+
+.pipe-node.completed {
+  border-color: #6ee7b7;
+  background: #f0fdf4;
+}
+
+.pipe-node.completed .pipe-num {
+  color: #059669;
+}
+
+/* Mathematical Verification Drawer */
+.math-drawer {
+  margin-top: 14px;
+}
+
+.math-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px 20px 20px;
+}
+
+@media (max-width: 768px) {
+  .math-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.math-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.math-card:hover {
+  border-color: var(--border-hover);
+  box-shadow: var(--shadow-sm);
+}
+
+.math-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.math-head strong {
+  font-size: 13px;
+  font-weight: 750;
+  color: var(--text-primary);
+}
+
+.math-eq-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 7px;
+  background: rgba(2, 132, 199, 0.1);
+  color: #0284c7;
+  border: 1px solid rgba(2, 132, 199, 0.2);
+  border-radius: var(--radius-sm);
+}
+
+.math-formula {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.45;
+  color: #0f172a;
+  background: #f8fafc;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  margin: 4px 0;
+  word-break: break-all;
+}
+
+.math-desc {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
 /* Real-Time Flight Recorder Log Card */
 .event-card h2 {
   margin-bottom: 10px;
