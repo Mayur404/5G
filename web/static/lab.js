@@ -22,7 +22,7 @@ const app = {
   frameStart: performance.now(), pausedProgress: 0, pauseWall: null,
   selectedCell: 0, view: {zoom: 1, cx: 50, cy: 50}, drag: null,
   outcome: null, outcomeStep: null, pulse: null,
-  hover: null, trail: [], sliceHighlight: null,
+  hover: null, trail: [], sliceHighlight: null, autoTrack: false,
 };
 
 async function requestJSON(url, payload) {
@@ -66,7 +66,10 @@ function canvasSize() {
 }
 
 function projection(width, height) {
-  const side = Math.min(width - 54, height - 54) * app.view.zoom;
+  // Sizing the coordinate space so that the map fills up the screen generously
+  const baseDim = Math.min(width, height);
+  // 1.15 scale ensures the 5G smart city and roads occupy the screen generously
+  const side = (baseDim - 10) * 1.15 * app.view.zoom;
   const x = value => width / 2 + (value - app.view.cx) * side / 100;
   const y = value => height / 2 + (value - app.view.cy) * side / 100;
   return {
@@ -77,12 +80,17 @@ function projection(width, height) {
 }
 
 function clampView() {
-  const halfVisible = 50 / app.view.zoom;
-  app.view.cx = clamp(app.view.cx, halfVisible, 100 - halfVisible);
-  app.view.cy = clamp(app.view.cy, halfVisible, 100 - halfVisible);
+  // Free roaming bounds allowing user to move around anywhere across the city
+  const panLimit = 75;
+  app.view.cx = clamp(app.view.cx, 50 - panLimit, 50 + panLimit);
+  app.view.cy = clamp(app.view.cy, 50 - panLimit, 50 + panLimit);
   setText("zoomLevel", `${Math.round(app.view.zoom * 100)}%`);
   $("zoomOut").disabled = app.view.zoom <= 1;
-  $("zoomIn").disabled = app.view.zoom >= 2.8;
+  $("zoomIn").disabled = app.view.zoom >= 3.8;
+  const trackBtn = $("trackCar");
+  if (trackBtn) {
+    trackBtn.classList.toggle("active", Boolean(app.autoTrack));
+  }
 }
 
 function zoomTo(next, anchor) {
@@ -90,10 +98,10 @@ function zoomTo(next, anchor) {
   const before = projection(rect.width, rect.height);
   const px = anchor?.x ?? rect.width / 2, py = anchor?.y ?? rect.height / 2;
   const worldX = before.worldX(px), worldY = before.worldY(py);
-  app.view.zoom = clamp(Math.round(next * 20) / 20, 1, 2.8);
-  const afterSide = Math.min(rect.width - 54, rect.height - 54) * app.view.zoom;
-  app.view.cx = worldX - (px - rect.width / 2) * 100 / afterSide;
-  app.view.cy = worldY - (py - rect.height / 2) * 100 / afterSide;
+  app.view.zoom = clamp(Math.round(next * 20) / 20, 1, 3.8);
+  const after = projection(rect.width, rect.height);
+  app.view.cx = worldX - (px - rect.width / 2) * 100 / after.side;
+  app.view.cy = worldY - (py - rect.height / 2) * 100 / after.side;
   clampView();
 }
 
@@ -150,30 +158,63 @@ function drawMap(now) {
   const visualNow = app.playing ? now : (app.pauseWall ?? now);
   const alpha = app.playing ? clamp((now - app.frameStart) / STEP_MS, 0, 1) : app.pausedProgress;
 
-  ctx.clearRect(0, 0, width, height);
-
-  // 1. Engineering Background
-  ctx.fillStyle = "#f8fafc";
-  ctx.fillRect(0, 0, width, height);
-
-  // Quadrant Zone backgrounds
-  const sectors = [
-    {cell: 0, x: 0, y: 0, shade: "#f1f5f9"},
-    {cell: 1, x: 50, y: 0, shade: "#f8fafc"},
-    {cell: 2, x: 0, y: 50, shade: "#f8fafc"},
-    {cell: 3, x: 50, y: 50, shade: "#f1f5f9"},
-  ];
-  for (const s of sectors) {
-    ctx.fillStyle = s.shade;
-    ctx.fillRect(p.x(s.x), p.y(s.y), p.side / 2, p.side / 2);
+  // Auto-track focus car if enabled
+  if (app.autoTrack && focus) {
+    const prior = previous?.ues.find(item => item.id === focus.id) || focus;
+    const targetX = prior.x + (focus.x - prior.x) * alpha;
+    const targetY = prior.y + (focus.y - prior.y) * alpha;
+    app.view.cx += (targetX - app.view.cx) * 0.08;
+    app.view.cy += (targetY - app.view.cy) * 0.08;
+    clampView();
   }
 
-  // Engineering Dot Grid Pattern
+  ctx.clearRect(0, 0, width, height);
+
+  // 1. Engineering Background & Expansive Sector Grounds (Fills entire canvas)
+  const splitX = p.x(50);
+  const splitY = p.y(50);
+  ctx.fillStyle = "#f8fafc";
+  ctx.fillRect(0, 0, splitX, splitY);
+  ctx.fillStyle = "#f1f5f9";
+  ctx.fillRect(splitX, 0, width - splitX, splitY);
+  ctx.fillStyle = "#f1f5f9";
+  ctx.fillRect(0, splitY, splitX, height - splitY);
+  ctx.fillStyle = "#f8fafc";
+  ctx.fillRect(splitX, splitY, width - splitX, height - splitY);
+
+  // Subtle Smart City Block Footprints in Sector Quadrants
+  ctx.save();
+  const campusZones = [
+    {x1: 5, y1: 5, x2: 17, y2: 17, color: "rgba(226, 232, 240, 0.45)", label: "C0 TECH CAMPUS"},
+    {x1: 83, y1: 5, x2: 95, y2: 17, color: "rgba(226, 232, 240, 0.45)", label: "C1 INNOVATION HUB"},
+    {x1: 5, y1: 83, x2: 17, y2: 95, color: "rgba(226, 232, 240, 0.45)", label: "C2 LOGISTICS PARK"},
+    {x1: 83, y1: 83, x2: 95, y2: 95, color: "rgba(226, 232, 240, 0.45)", label: "C3 MOBILITY LAB"}
+  ];
+  for (const cz of campusZones) {
+    const bx = p.x(cz.x1), by = p.y(cz.y1);
+    const bw = p.x(cz.x2) - bx, bh = p.y(cz.y2) - by;
+    ctx.fillStyle = cz.color;
+    ctx.strokeStyle = "rgba(148, 163, 184, 0.35)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(bx, by, bw, bh, 6);
+    ctx.fill();
+    ctx.stroke();
+    if (app.view.zoom >= 1.1) {
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "700 8.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(cz.label, bx + bw / 2, by + bh / 2 + 3);
+    }
+  }
+  ctx.restore();
+
+  // Engineering Dot Grid Pattern across visible screen
   ctx.save();
   ctx.fillStyle = "#cbd5e1";
   const stepWorld = 10;
-  for (let wx = 5; wx <= 95; wx += stepWorld) {
-    for (let wy = 5; wy <= 95; wy += stepWorld) {
+  for (let wx = -20; wx <= 120; wx += stepWorld) {
+    for (let wy = -20; wy <= 120; wy += stepWorld) {
       const px = p.x(wx), py = p.y(wy);
       if (px >= 0 && px <= width && py >= 0 && py <= height) {
         ctx.fillRect(px - 1, py - 1, 2, 2);
@@ -182,76 +223,273 @@ function drawMap(now) {
   }
   ctx.restore();
 
-  // Transit Corridors (Road Network where vehicles navigate)
+  // 2. Expansive Full-Screen 5G Connected Smart City Road Network
   ctx.save();
-  // North-South Main Corridor (through C2 and C0 at x = 25)
-  const roadWidth = p.side * 0.16;
-  ctx.fillStyle = "rgba(226, 232, 240, 0.75)";
-  ctx.fillRect(p.x(25) - roadWidth / 2, p.y(0), roadWidth, p.side);
-  // East-West Corridor (through C2/C3 at y = 75 and C0/C1 at y = 25)
-  ctx.fillRect(p.x(0), p.y(25) - roadWidth / 2, p.side, roadWidth);
-  ctx.fillRect(p.x(0), p.y(75) - roadWidth / 2, p.side, roadWidth);
+  // Substantially bigger road dimensions filling the screen
+  const hwyWidth = p.side * 0.32; // Central Handover Super-Highway (spans full screen)
+  const nsWidth = p.side * 0.24;  // North-South Transit Expressways (spans full screen)
+  const ewWidth = p.side * 0.20;  // East-West Boulevards (spans full screen)
+  const medWidth = p.side * 0.16; // Handover Meridian Avenue at x=50
 
-  // Corridor Curbs / Borders
-  ctx.strokeStyle = "#cbd5e1";
-  ctx.lineWidth = 1.2;
-  // N-S Corridor curbs
+  const hwyCurb = hwyWidth + 18;
+  const nsCurb = nsWidth + 14;
+  const ewCurb = ewWidth + 12;
+  const medCurb = medWidth + 10;
+
+  // A. Concrete Sidewalk & Curb Beds (spans full canvas width & height)
+  ctx.fillStyle = "#cbd5e1";
+  ctx.fillRect(p.x(50) - medCurb / 2, 0, medCurb, height);
+  ctx.fillRect(p.x(25) - nsCurb / 2, 0, nsCurb, height);
+  ctx.fillRect(p.x(75) - nsCurb / 2, 0, nsCurb, height);
+  ctx.fillRect(0, p.y(25) - ewCurb / 2, width, ewCurb);
+  ctx.fillRect(0, p.y(75) - ewCurb / 2, width, ewCurb);
+  ctx.fillRect(0, p.y(50) - hwyCurb / 2, width, hwyCurb);
+
+  // B. Dark Asphalt Roadbeds (spans full canvas width & height)
+  ctx.fillStyle = "#334155";
+  ctx.fillRect(p.x(50) - medWidth / 2, 0, medWidth, height);
+
+  ctx.fillStyle = "#1e293b";
+  ctx.fillRect(p.x(25) - nsWidth / 2, 0, nsWidth, height);
+  ctx.fillRect(p.x(75) - nsWidth / 2, 0, nsWidth, height);
+  ctx.fillRect(0, p.y(25) - ewWidth / 2, width, ewWidth);
+  ctx.fillRect(0, p.y(75) - ewWidth / 2, width, ewWidth);
+
+  // Central Handover Super-Highway (y=50) - Deep Obsidian Highway Asphalt
+  ctx.fillStyle = "#0f172a";
+  ctx.fillRect(0, p.y(50) - hwyWidth / 2, width, hwyWidth);
+
+  // C. Crisp White Outer Shoulder Lines (Full Screen)
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 2.0;
+
+  for (const rx of [25, 75]) {
+    const px = p.x(rx);
+    ctx.beginPath();
+    ctx.moveTo(px - nsWidth / 2 + 5, 0);
+    ctx.lineTo(px - nsWidth / 2 + 5, height);
+    ctx.moveTo(px + nsWidth / 2 - 5, 0);
+    ctx.lineTo(px + nsWidth / 2 - 5, height);
+    ctx.stroke();
+  }
+
+  for (const ry of [25, 75]) {
+    const py = p.y(ry);
+    ctx.beginPath();
+    ctx.moveTo(0, py - ewWidth / 2 + 4);
+    ctx.lineTo(width, py - ewWidth / 2 + 4);
+    ctx.moveTo(0, py + ewWidth / 2 - 4);
+    ctx.lineTo(width, py + ewWidth / 2 - 4);
+    ctx.stroke();
+  }
+
+  const hwyY = p.y(50);
   ctx.beginPath();
-  ctx.moveTo(p.x(25) - roadWidth / 2, p.y(0));
-  ctx.lineTo(p.x(25) - roadWidth / 2, p.y(100));
-  ctx.moveTo(p.x(25) + roadWidth / 2, p.y(0));
-  ctx.lineTo(p.x(25) + roadWidth / 2, p.y(100));
-  // E-W Corridor curbs
-  ctx.moveTo(p.x(0), p.y(25) - roadWidth / 2);
-  ctx.lineTo(p.x(100), p.y(25) - roadWidth / 2);
-  ctx.moveTo(p.x(0), p.y(25) + roadWidth / 2);
-  ctx.lineTo(p.x(100), p.y(25) + roadWidth / 2);
-  ctx.moveTo(p.x(0), p.y(75) - roadWidth / 2);
-  ctx.lineTo(p.x(100), p.y(75) - roadWidth / 2);
-  ctx.moveTo(p.x(0), p.y(75) + roadWidth / 2);
-  ctx.lineTo(p.x(100), p.y(75) + roadWidth / 2);
+  ctx.moveTo(0, hwyY - hwyWidth / 2 + 6);
+  ctx.lineTo(width, hwyY - hwyWidth / 2 + 6);
+  ctx.moveTo(0, hwyY + hwyWidth / 2 - 6);
+  ctx.lineTo(width, hwyY + hwyWidth / 2 - 6);
   ctx.stroke();
 
-  // Road Dash Centerline
-  ctx.strokeStyle = "#94a3b8";
-  ctx.lineWidth = 1.5;
-  ctx.setLineDash([8, 8]);
+  // D. Dual Amber Centerlines
+  ctx.strokeStyle = "#f59e0b";
+  ctx.lineWidth = 1.6;
+
+  // Handover Meridian (x=50)
   ctx.beginPath();
-  ctx.moveTo(p.x(25), p.y(0));
-  ctx.lineTo(p.x(25), p.y(100));
-  ctx.moveTo(p.x(0), p.y(25));
-  ctx.lineTo(p.x(100), p.y(25));
-  ctx.moveTo(p.x(0), p.y(75));
-  ctx.lineTo(p.x(100), p.y(75));
+  ctx.moveTo(p.x(50), 0);
+  ctx.lineTo(p.x(50), height);
+  ctx.stroke();
+
+  // N-S Expressways (x=25, 75)
+  for (const rx of [25, 75]) {
+    const px = p.x(rx);
+    ctx.beginPath();
+    ctx.moveTo(px - 2.5, 0);
+    ctx.lineTo(px - 2.5, height);
+    ctx.moveTo(px + 2.5, 0);
+    ctx.lineTo(px + 2.5, height);
+    ctx.stroke();
+  }
+
+  // E-W Boulevards (y=25, 75)
+  for (const ry of [25, 75]) {
+    const py = p.y(ry);
+    ctx.beginPath();
+    ctx.moveTo(0, py - 2.5);
+    ctx.lineTo(width, py - 2.5);
+    ctx.moveTo(0, py + 2.5);
+    ctx.lineTo(width, py + 2.5);
+    ctx.stroke();
+  }
+
+  // Central Super-Highway Median Barrier with amber warning lines
+  ctx.fillStyle = "#334155";
+  ctx.fillRect(0, hwyY - 3.5, width, 7);
+  ctx.beginPath();
+  ctx.moveTo(0, hwyY - 5);
+  ctx.lineTo(width, hwyY - 5);
+  ctx.moveTo(0, hwyY + 5);
+  ctx.lineTo(width, hwyY + 5);
+  ctx.stroke();
+
+  // E. Dashed White Lane Dividers
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.55)";
+  ctx.lineWidth = 1.4;
+  ctx.setLineDash([14, 14]);
+
+  // N-S Lane Dividers
+  for (const rx of [25, 75]) {
+    const px = p.x(rx);
+    ctx.beginPath();
+    ctx.moveTo(px - nsWidth * 0.25, 0);
+    ctx.lineTo(px - nsWidth * 0.25, height);
+    ctx.moveTo(px + nsWidth * 0.25, 0);
+    ctx.lineTo(px + nsWidth * 0.25, height);
+    ctx.stroke();
+  }
+
+  // E-W Boulevard Lane Dividers
+  for (const ry of [25, 75]) {
+    const py = p.y(ry);
+    ctx.beginPath();
+    ctx.moveTo(0, py - ewWidth * 0.25);
+    ctx.lineTo(width, py - ewWidth * 0.25);
+    ctx.moveTo(0, py + ewWidth * 0.25);
+    ctx.lineTo(width, py + ewWidth * 0.25);
+    ctx.stroke();
+  }
+
+  // Central Super-Highway 4-Lane Dividers (y=50)
+  ctx.beginPath();
+  ctx.moveTo(0, hwyY - hwyWidth * 0.25);
+  ctx.lineTo(width, hwyY - hwyWidth * 0.25);
+  ctx.moveTo(0, hwyY + hwyWidth * 0.25);
+  ctx.lineTo(width, hwyY + hwyWidth * 0.25);
   ctx.stroke();
   ctx.setLineDash([]);
+
+  // F. Luminous Cat's Eye Retroreflectors along Central Highway
+  ctx.fillStyle = "#fef08a";
+  for (let lx = 15; lx < width; lx += 36) {
+    ctx.fillRect(lx, hwyY - hwyWidth * 0.25 - 1, 2.5, 2.5);
+    ctx.fillRect(lx, hwyY + hwyWidth * 0.25 - 1, 2.5, 2.5);
+  }
+
+  // G. Grade-Separated Highway Overpasses at (25, 50) and (75, 50)
+  for (const rx of [25, 75]) {
+    const px = p.x(rx);
+    const bridgeW = nsWidth + 24;
+    ctx.fillStyle = "rgba(0, 0, 0, 0.32)";
+    ctx.fillRect(px - bridgeW / 2 - 4, hwyY - hwyWidth / 2 - 2, bridgeW + 8, hwyWidth + 12);
+    ctx.fillStyle = "#0f172a";
+    ctx.fillRect(px - bridgeW / 2, hwyY - hwyWidth / 2, bridgeW, hwyWidth);
+    ctx.fillStyle = "#94a3b8";
+    ctx.fillRect(px - bridgeW / 2, hwyY - hwyWidth / 2 - 3, bridgeW, 4);
+    ctx.fillRect(px - bridgeW / 2, hwyY + hwyWidth / 2 - 1, bridgeW, 4);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.7)";
+    ctx.lineWidth = 1.4;
+    ctx.setLineDash([14, 14]);
+    ctx.beginPath();
+    ctx.moveTo(px - bridgeW / 2, hwyY - hwyWidth * 0.25);
+    ctx.lineTo(px + bridgeW / 2, hwyY - hwyWidth * 0.25);
+    ctx.moveTo(px - bridgeW / 2, hwyY + hwyWidth * 0.25);
+    ctx.lineTo(px + bridgeW / 2, hwyY + hwyWidth * 0.25);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#334155";
+    ctx.fillRect(px - bridgeW / 2, hwyY - 3.5, bridgeW, 7);
+  }
+
+  // H. Pedestrian Zebra Crossings & Stop Bars at Intersections
+  const junctions = [
+    {x: 25, y: 25, w: nsWidth, h: ewWidth},
+    {x: 75, y: 25, w: nsWidth, h: ewWidth},
+    {x: 25, y: 75, w: nsWidth, h: ewWidth},
+    {x: 75, y: 75, w: nsWidth, h: ewWidth},
+    {x: 50, y: 25, w: medWidth, h: ewWidth},
+    {x: 50, y: 75, w: medWidth, h: ewWidth},
+  ];
+  ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+  for (const junc of junctions) {
+    const ix = p.x(junc.x), iy = p.y(junc.y);
+    const halfW = junc.w / 2;
+    const halfH = junc.h / 2;
+    const barW = 4, barGap = 8;
+    for (let bx = -halfW + 8; bx <= halfW - 8; bx += barGap) {
+      ctx.fillRect(ix + bx, iy - halfH - 14, barW, 10);
+    }
+    for (let bx = -halfW + 8; bx <= halfW - 8; bx += barGap) {
+      ctx.fillRect(ix + bx, iy + halfH + 4, barW, 10);
+    }
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(ix - halfW + 4, iy - halfH - 17, junc.w - 8, 2.5);
+    ctx.fillRect(ix - halfW + 4, iy + halfH + 15, junc.w - 8, 2.5);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+  }
+
+  // I. Overhead High-Tech Highway Signage Gantry at x = 48
+  const gantryX = p.x(48);
+  if (gantryX >= 50 && gantryX <= width - 50) {
+    ctx.fillStyle = "#475569";
+    ctx.fillRect(gantryX - 3, hwyY - hwyWidth / 2 - 14, 6, hwyWidth + 28);
+    ctx.fillStyle = "#15803d";
+    ctx.fillRect(gantryX - 60, hwyY - hwyWidth / 2 - 12, 56, 11);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "800 7px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("◄ C2 MACRO", gantryX - 32, hwyY - hwyWidth / 2 - 4);
+    ctx.fillStyle = "#15803d";
+    ctx.fillRect(gantryX + 4, hwyY - hwyWidth / 2 - 12, 74, 11);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText("3GPP A3 HO ➔ C0", gantryX + 41, hwyY - hwyWidth / 2 - 4);
+    ctx.fillStyle = app.snapshot?.proposed?.contracts?.length ? "#38bdf8" : "#22c55e";
+    ctx.beginPath();
+    ctx.arc(gantryX, hwyY - hwyWidth / 2 - 16, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // J. Roadside V2X RSUs (Vehicle-to-Everything Beacons)
+  const rsuPoints = [12, 36, 64, 88];
+  for (const rx of rsuPoints) {
+    const rxp = p.x(rx);
+    const ryp = hwyY - hwyWidth / 2 - 5;
+    if (rxp >= 0 && rxp <= width) {
+      ctx.fillStyle = "#64748b";
+      ctx.fillRect(rxp - 1.5, ryp - 8, 3, 8);
+      ctx.fillStyle = "#0ea5e9";
+      ctx.beginPath();
+      ctx.arc(rxp, ryp - 9, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
   ctx.restore();
 
-  // Cell Boundaries (Orthogonal Grid at x = 50, y = 50)
+  // Cell Boundaries (Orthogonal Grid Demarcation at x = 50, y = 50)
   ctx.save();
-  ctx.strokeStyle = "#64748b";
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = "#475569";
+  ctx.lineWidth = 2.2;
   ctx.setLineDash([8, 6]);
   ctx.beginPath();
-  ctx.moveTo(p.x(50), p.y(0));
-  ctx.lineTo(p.x(50), p.y(100));
-  ctx.moveTo(p.x(0), p.y(50));
-  ctx.lineTo(p.x(100), p.y(50));
+  ctx.moveTo(p.x(50), 0);
+  ctx.lineTo(p.x(50), height);
+  ctx.moveTo(0, p.y(50));
+  ctx.lineTo(width, p.y(50));
   ctx.stroke();
   ctx.setLineDash([]);
 
   // Boundary corridor band at y = 50
   ctx.save();
   ctx.fillStyle = "rgba(226, 232, 240, 0.4)";
-  ctx.fillRect(p.x(0), p.y(54), p.side, p.y(46) - p.y(54));
+  ctx.fillRect(0, p.y(54), width, p.y(46) - p.y(54));
   ctx.restore();
 
   // Boundary Labels
-  ctx.font = "800 9.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-  ctx.fillStyle = "#64748b";
+  ctx.font = "800 10.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+  ctx.fillStyle = "#475569";
   ctx.letterSpacing = "0.08em";
   ctx.textAlign = "center";
-  ctx.fillText("CELL BOUNDARY · HANDOVER FRONTIER", p.x(50), p.y(50) - 7);
+  ctx.fillText("CELL BOUNDARY · 3GPP A3 HANDOVER FRONTIER", p.x(50), p.y(50) - 14);
   ctx.restore();
 
   // 2. Translucent RF Coverage Contour Rings, 3GPP Sector Boresights & Dynamic Waves from each cell tower
@@ -907,6 +1145,118 @@ function drawMap(now) {
     ctx.fillText(`Handover: ${hoStatus}  ·  ${focus.allocated}/${focus.demand} RB`, hudX + 12, hudY + 70);
     ctx.restore();
   }
+
+  // 12. Dynamic Physical Scale Bar on Canvas (Google Maps / OpenStreetMap style)
+  ctx.save();
+  const scaleMetersList = [50, 100, 200, 500, 1000];
+  const pxPerMeter = p.side / 1000;
+  let chosenMeters = 200;
+  for (const m of scaleMetersList) {
+    const pxLen = m * pxPerMeter;
+    if (pxLen >= 45 && pxLen <= 120) {
+      chosenMeters = m;
+      break;
+    }
+  }
+  const scaleBarPx = chosenMeters * pxPerMeter;
+  const barX = 16, barY = height - 16;
+  ctx.strokeStyle = "#475569";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(barX, barY - 4);
+  ctx.lineTo(barX, barY);
+  ctx.lineTo(barX + scaleBarPx, barY);
+  ctx.lineTo(barX + scaleBarPx, barY - 4);
+  ctx.stroke();
+
+  ctx.font = "700 9.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace";
+  ctx.fillStyle = "#475569";
+  ctx.textAlign = "center";
+  ctx.fillText(`${chosenMeters} m`, barX + scaleBarPx / 2, barY - 5);
+  ctx.restore();
+
+  // 13. High-Precision Navigation Compass Rose in Top-Right
+  if (width >= 480) {
+    const compassX = width - 262, compassY = 46;
+    ctx.save();
+    ctx.fillStyle = "rgba(255, 255, 255, 0.88)";
+    ctx.strokeStyle = "rgba(203, 213, 225, 0.8)";
+    ctx.lineWidth = 1;
+    ctx.shadowColor = "rgba(15, 23, 42, 0.1)";
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.arc(compassX, compassY, 18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.shadowColor = "transparent";
+
+    // North Needle (Vermillion)
+    ctx.fillStyle = "#e42b0c";
+    ctx.beginPath();
+    ctx.moveTo(compassX, compassY - 13);
+    ctx.lineTo(compassX - 3.5, compassY);
+    ctx.lineTo(compassX + 3.5, compassY);
+    ctx.closePath();
+    ctx.fill();
+
+    // South Needle (Slate)
+    ctx.fillStyle = "#94a3b8";
+    ctx.beginPath();
+    ctx.moveTo(compassX, compassY + 13);
+    ctx.lineTo(compassX - 3.5, compassY);
+    ctx.lineTo(compassX + 3.5, compassY);
+    ctx.closePath();
+    ctx.fill();
+
+    // North Label
+    ctx.font = "800 8px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+    ctx.fillStyle = "#e42b0c";
+    ctx.textAlign = "center";
+    ctx.fillText("N", compassX, compassY - 14);
+    ctx.restore();
+  }
+
+  // 14. Target Lock Telemetry Reticle on Focus Car when Auto-Tracking
+  if (app.autoTrack && focusPosition) {
+    ctx.save();
+    const bx = focusPosition.x, by = focusPosition.y;
+    const boxSize = 42;
+    const bracketLen = 10;
+    const pulseOffset = Math.sin(visualNow * 0.005) * 2;
+
+    ctx.strokeStyle = "#38bdf8";
+    ctx.lineWidth = 1.8;
+    // Top-Left bracket
+    ctx.beginPath();
+    ctx.moveTo(bx - boxSize - pulseOffset + bracketLen, by - boxSize - pulseOffset);
+    ctx.lineTo(bx - boxSize - pulseOffset, by - boxSize - pulseOffset);
+    ctx.lineTo(bx - boxSize - pulseOffset, by - boxSize - pulseOffset + bracketLen);
+    ctx.stroke();
+    // Top-Right bracket
+    ctx.beginPath();
+    ctx.moveTo(bx + boxSize + pulseOffset - bracketLen, by - boxSize - pulseOffset);
+    ctx.lineTo(bx + boxSize + pulseOffset, by - boxSize - pulseOffset);
+    ctx.lineTo(bx + boxSize + pulseOffset, by - boxSize - pulseOffset + bracketLen);
+    ctx.stroke();
+    // Bottom-Left bracket
+    ctx.beginPath();
+    ctx.moveTo(bx - boxSize - pulseOffset + bracketLen, by + boxSize + pulseOffset);
+    ctx.lineTo(bx - boxSize - pulseOffset, by + boxSize + pulseOffset);
+    ctx.lineTo(bx - boxSize - pulseOffset, by + boxSize + pulseOffset - bracketLen);
+    ctx.stroke();
+    // Bottom-Right bracket
+    ctx.beginPath();
+    ctx.moveTo(bx + boxSize + pulseOffset - bracketLen, by + boxSize + pulseOffset);
+    ctx.lineTo(bx + boxSize + pulseOffset, by + boxSize + pulseOffset);
+    ctx.lineTo(bx + boxSize + pulseOffset, by + boxSize + pulseOffset - bracketLen);
+    ctx.stroke();
+
+    ctx.font = "800 8px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace";
+    ctx.fillStyle = "#38bdf8";
+    ctx.textAlign = "center";
+    ctx.fillText("TARGET ACQUIRED · AUTO-FOLLOW", bx, by - boxSize - pulseOffset - 4);
+    ctx.restore();
+  }
 }
 
 function renderTower() {
@@ -1351,8 +1701,75 @@ function setupMapInteractions() {
   $("zoomIn").addEventListener("click", () => zoomTo(app.view.zoom + 0.25));
   $("zoomOut").addEventListener("click", () => zoomTo(app.view.zoom - 0.25));
   $("fitMap").addEventListener("click", () => {
+    app.autoTrack = false;
     app.view = {zoom: 1, cx: 50, cy: 50};
     clampView();
+  });
+
+  const trackBtn = $("trackCar");
+  if (trackBtn) {
+    trackBtn.addEventListener("click", () => {
+      app.autoTrack = !app.autoTrack;
+      if (app.autoTrack) {
+        if (app.view.zoom < 1.4) app.view.zoom = 1.5;
+        const focus = app.snapshot?.proposed?.ues?.find(ue => ue.id === app.snapshot?.focus_id);
+        if (focus) {
+          app.view.cx = focus.x;
+          app.view.cy = focus.y;
+        }
+      }
+      clampView();
+    });
+  }
+
+  const handoverBtn = $("focusHandover");
+  if (handoverBtn) {
+    handoverBtn.addEventListener("click", () => {
+      app.autoTrack = false;
+      app.view = {zoom: 1.5, cx: 36, cy: 50};
+      clampView();
+    });
+  }
+
+  window.addEventListener("keydown", event => {
+    if (event.target.tagName === "INPUT" || event.target.tagName === "SELECT") return;
+    const rect = canvas.getBoundingClientRect();
+    const p = projection(rect.width, rect.height);
+    const panStep = (35 / p.side) * 100;
+    if (event.key === "ArrowLeft" || event.key === "a" || event.key === "A") {
+      app.autoTrack = false;
+      app.view.cx -= panStep;
+      clampView();
+    } else if (event.key === "ArrowRight" || event.key === "d" || event.key === "D") {
+      app.autoTrack = false;
+      app.view.cx += panStep;
+      clampView();
+    } else if (event.key === "ArrowUp" || event.key === "w" || event.key === "W") {
+      app.autoTrack = false;
+      app.view.cy -= panStep;
+      clampView();
+    } else if (event.key === "ArrowDown" || event.key === "s" || event.key === "S") {
+      app.autoTrack = false;
+      app.view.cy += panStep;
+      clampView();
+    } else if (event.key === "+" || event.key === "=") {
+      zoomTo(app.view.zoom + 0.25);
+    } else if (event.key === "-" || event.key === "_") {
+      zoomTo(app.view.zoom - 0.25);
+    } else if (event.key === "f" || event.key === "F" || event.key === "0") {
+      app.autoTrack = false;
+      app.view = {zoom: 1, cx: 50, cy: 50};
+      clampView();
+    } else if (event.key === "h" || event.key === "H") {
+      app.autoTrack = false;
+      app.view = {zoom: 1.5, cx: 36, cy: 50};
+      clampView();
+    } else if (event.key === " ") {
+      event.preventDefault();
+      app.autoTrack = !app.autoTrack;
+      if (app.autoTrack && app.view.zoom < 1.4) app.view.zoom = 1.5;
+      clampView();
+    }
   });
 
   canvas.addEventListener("wheel", event => {
@@ -1365,6 +1782,7 @@ function setupMapInteractions() {
   }, {passive: false});
 
   canvas.addEventListener("pointerdown", event => {
+    app.autoTrack = false;
     canvas.setPointerCapture(event.pointerId);
     canvas.classList.add("dragging");
     app.drag = {x: event.clientX, y: event.clientY, moved: false};

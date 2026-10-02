@@ -1196,6 +1196,25 @@ main {
   padding: 0 10px;
 }
 
+.zoom-controls #focusHandover,
+.zoom-controls #trackCar {
+  font-size: 11px;
+  padding: 0 9px;
+  color: var(--text-secondary);
+}
+
+.zoom-controls #focusHandover:hover:not(:disabled),
+.zoom-controls #trackCar:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+
+.zoom-controls #trackCar.active {
+  background: var(--accent-vermillion);
+  color: #ffffff;
+  border-color: var(--accent-vermillion);
+  box-shadow: 0 2px 6px rgba(228, 43, 12, 0.35);
+}
+
 .zoom-controls span {
   font-family: var(--font-mono);
   font-size: 12px;
@@ -1208,14 +1227,14 @@ main {
 
 /* Canvas Area */
 .canvas-frame {
-  padding: 0 16px;
+  padding: 0 8px;
 }
 
 .canvas-frame canvas {
   display: block;
   width: 100%;
-  height: min(76vh, 840px);
-  min-height: 640px;
+  height: min(82vh, 920px);
+  min-height: 720px;
   background-color: #f8fafc;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -1839,7 +1858,7 @@ button:focus-visible, select:focus-visible, canvas:focus-visible, a:focus-visibl
 /* Responsive Breakpoints */
 @media (min-width: 1101px) {
   body .canvas-frame canvas {
-    height: min(80vh, 900px);
+    height: min(82vh, 920px);
     min-height: 720px;
   }
 }
@@ -1855,8 +1874,8 @@ button:focus-visible, select:focus-visible, canvas:focus-visible, a:focus-visibl
     grid-template-columns: minmax(0, 1fr) 330px;
   }
   .canvas-frame canvas {
-    height: 680px;
-    min-height: 620px;
+    height: 700px;
+    min-height: 640px;
   }
   .map-hint {
     width: 100%;
@@ -1910,7 +1929,9 @@ button:focus-visible, select:focus-visible, canvas:focus-visible, a:focus-visibl
     flex-direction: column;
   }
   .zoom-controls {
-    align-self: flex-end;
+    align-self: flex-start;
+    flex-wrap: wrap;
+    max-width: 100%;
   }
   .canvas-frame {
     padding: 0 8px;
