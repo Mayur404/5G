@@ -6,7 +6,7 @@ const setText = (id, value) => {
   const el = $(id);
   if (el) el.textContent = value;
 };
-const STEP_MS = 620;
+const STEP_MS = 750;
 
 const towerImage = new Image();
 towerImage.src = "/static/icons/tower.svg";
@@ -23,6 +23,7 @@ const app = {
   selectedCell: 0, view: {zoom: 1, cx: 50, cy: 50}, drag: null,
   outcome: null, outcomeStep: null, pulse: null,
   hover: null, trail: [], sliceHighlight: null, autoTrack: false,
+  selectedUEId: null, spotlightLine: null,
 };
 
 async function requestJSON(url, payload) {
@@ -68,8 +69,8 @@ function canvasSize() {
 function projection(width, height) {
   // Sizing the coordinate space so that the map fills up the screen generously
   const baseDim = Math.min(width, height);
-  // 1.15 scale ensures the 5G smart city and roads occupy the screen generously
-  const side = (baseDim - 10) * 1.15 * app.view.zoom;
+  // 1.55 scale ensures the 7-cell honeycomb cluster area is expansive and fills the canvas
+  const side = (baseDim - 10) * 1.55 * app.view.zoom;
   const x = value => width / 2 + (value - app.view.cx) * side / 100;
   const y = value => height / 2 + (value - app.view.cy) * side / 100;
   return {
@@ -117,9 +118,11 @@ function roundedLabel(ctx, text, x, y, background, foreground = "#fff", border =
   ctx.save();
   ctx.font = "700 11.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
   const metrics = ctx.measureText(text);
-  const width = metrics.width + 22;
+  const width = metrics.width + 20;
   const height = 26;
-  const rx = x - width / 2;
+  const canvasW = ctx.canvas.width / (window.devicePixelRatio || 1);
+  const clampedX = clamp(x, width / 2 + 12, canvasW - width / 2 - 12);
+  const rx = clampedX - width / 2;
   const ry = y - height / 2;
 
   // Shadow
@@ -143,7 +146,134 @@ function roundedLabel(ctx, text, x, y, background, foreground = "#fff", border =
   ctx.fillStyle = foreground;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(text, x, y);
+  ctx.fillText(text, clampedX, y);
+  ctx.restore();
+}
+
+function drawBackhaulMesh(ctx, network, p, visualNow, contract, selectedUE, width, height) {
+  const isBackhaulSpot = app.spotlightLine === "backhaul";
+  const isBackhaulDimmed = app.spotlightLine && !isBackhaulSpot;
+  const isHoneycomb7 = network.cells.length === 7;
+  const maxBackhaulDist = isHoneycomb7 ? 31.0 : (network.cells.length === 5 ? 36.5 : 52.0);
+
+  // Discover adjacent cell pairs in the backhaul network graph
+  const pairs = [];
+  for (let i = 0; i < network.cells.length; i++) {
+    for (let j = i + 1; j < network.cells.length; j++) {
+      const c1 = network.cells[i], c2 = network.cells[j];
+      const d = Math.hypot(c1.x - c2.x, c1.y - c2.y);
+      if (d <= maxBackhaulDist) {
+        pairs.push({c1, c2, d});
+      }
+    }
+  }
+
+  ctx.save();
+  if (isBackhaulDimmed) ctx.globalAlpha = 0.16;
+
+  // 1. Draw physical fiber optic conduits between adjacent base stations
+  for (const {c1, c2} of pairs) {
+    const x1 = p.x(c1.x), y1 = p.y(c1.y);
+    const x2 = p.x(c2.x), y2 = p.y(c2.y);
+    const selectedId = selectedUE?.id;
+
+    const isContractRoute = contract && ((c1.id === selectedUE?.cell && c2.id === contract.target) || (c2.id === selectedUE?.cell && c1.id === contract.target));
+    const isHoRoute = app.pulse && app.pulse.ue === selectedId && ((c1.id === app.pulse.from && c2.id === app.pulse.to) || (c2.id === app.pulse.from && c1.id === app.pulse.to));
+    const isSelectedRoute = (c1.id === app.selectedCell || c2.id === app.selectedCell);
+
+    // Outer conduit sheath
+    ctx.strokeStyle = isBackhaulSpot
+      ? "rgba(2, 132, 199, 0.45)"
+      : isContractRoute
+      ? "rgba(234, 88, 12, 0.40)"
+      : isHoRoute
+      ? "rgba(16, 185, 129, 0.45)"
+      : isSelectedRoute
+      ? "rgba(2, 132, 199, 0.28)"
+      : "rgba(148, 163, 184, 0.26)";
+    ctx.lineWidth = isBackhaulSpot ? 4.5 : (isContractRoute || isHoRoute) ? 3.5 : 2.2;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+
+    // Inner optical core line
+    ctx.strokeStyle = isBackhaulSpot
+      ? "#0284c7"
+      : isContractRoute
+      ? "#ea580c"
+      : isHoRoute
+      ? "#10b981"
+      : isSelectedRoute
+      ? "#38bdf8"
+      : "rgba(100, 116, 139, 0.52)";
+    ctx.lineWidth = isBackhaulSpot ? 2.2 : 1.4;
+    ctx.setLineDash(isBackhaulSpot ? [6, 4] : [4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Animated optical photon packets on active signaling routes (strictly for selected device)
+    if (isContractRoute || isHoRoute || isBackhaulSpot) {
+      const packetCount = (isContractRoute || isHoRoute) ? 3 : 1;
+      const speed = isHoRoute ? 0.0014 : 0.0008;
+      const pColor = isHoRoute ? "#10b981" : isContractRoute ? "#ea580c" : "#38bdf8";
+
+      for (let k = 0; k < packetCount; k++) {
+        const frac = ((visualNow * speed) + k / packetCount) % 1;
+        const fromX = (c1.id === (selectedUE?.cell ?? app.pulse?.from)) ? x1 : x2;
+        const fromY = (c1.id === (selectedUE?.cell ?? app.pulse?.from)) ? y1 : y2;
+        const toX = (fromX === x1) ? x2 : x1;
+        const toY = (fromY === y1) ? y2 : y1;
+        const px = fromX + (toX - fromX) * frac;
+        const py = fromY + (toY - fromY) * frac;
+
+        ctx.save();
+        ctx.fillStyle = pColor;
+        ctx.shadowColor = pColor;
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(px, py, isBackhaulSpot ? 4.5 : 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // Mid-link explanatory label on active route
+      if ((isContractRoute || isHoRoute) && (visualNow % 4200 < 3400)) {
+        const midX = (x1 + x2) / 2, midY = (y1 + y2) / 2;
+        const backhaulLabel = isHoRoute
+          ? `⚡ 3GPP Xn FIBER: Transferring UE${selectedId} Data Plane C${app.pulse.from} ➔ C${app.pulse.to} (0ms Drop)`
+          : `⚡ 3GPP Xn FIBER: Inter-gNB Handover Prep & PRB Reservation (TS 38.423)`;
+        roundedLabel(ctx, backhaulLabel, midX, midY, "#0f172a", isHoRoute ? "#a7f3d0" : "#ffedd5", isHoRoute ? "#10b981" : "#ea580c");
+      }
+    }
+  }
+
+  // 2. Optical Distribution Frame (ODF) Junction Rings at Base Stations
+  for (const cell of network.cells) {
+    const cx = p.x(cell.x), cy = p.y(cell.y);
+    const isConn = (cell.id === selectedUE?.cell || (contract && cell.id === contract.target) || (app.pulse && (cell.id === app.pulse.from || cell.id === app.pulse.to)));
+    ctx.fillStyle = isBackhaulSpot ? "#0284c7" : isConn ? "#38bdf8" : "#64748b";
+    ctx.beginPath();
+    ctx.arc(cx, cy, isBackhaulSpot ? 6 : 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(cx, cy, isBackhaulSpot ? 2.5 : 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 3. Central Backhaul Tag if Spotlighted
+  if (isBackhaulSpot) {
+    const c0 = network.cells[0];
+    if (c0) {
+      roundedLabel(ctx, "⚡ 3GPP Xn-C OPTICAL BACKHAUL MESH (TS 38.423)", p.x(c0.x), p.y(c0.y) + 38, "#0369a1", "#e0f2fe", "#0284c7");
+    }
+  }
   ctx.restore();
 }
 
@@ -153,16 +283,21 @@ function drawMap(now) {
   const p = projection(width, height);
   const network = app.snapshot.proposed;
   const previous = app.previous?.proposed;
-  const focusId = app.snapshot.focus_id;
-  const focus = network.ues.find(ue => ue.id === focusId);
+  const scenarioFocusId = app.snapshot.focus_id;
+  const selectedId = app.selectedUEId ?? scenarioFocusId;
+  const selectedUE = network.ues.find(ue => ue.id === selectedId) || network.ues[0];
+  const scenarioFocus = network.ues.find(ue => ue.id === scenarioFocusId);
+  const contract = network.contracts.find(item => item.ue === selectedId);
+  const contractUE = contract ? network.ues.find(item => item.id === contract.ue) : null;
   const visualNow = app.playing ? now : (app.pauseWall ?? now);
   const alpha = app.playing ? clamp((now - app.frameStart) / STEP_MS, 0, 1) : app.pausedProgress;
 
-  // Auto-track focus car if enabled
-  if (app.autoTrack && focus) {
-    const prior = previous?.ues.find(item => item.id === focus.id) || focus;
-    const targetX = prior.x + (focus.x - prior.x) * alpha;
-    const targetY = prior.y + (focus.y - prior.y) * alpha;
+  // Auto-track selected target if enabled
+  const trackTarget = selectedUE;
+  if (app.autoTrack && trackTarget) {
+    const prior = previous?.ues.find(item => item.id === trackTarget.id) || trackTarget;
+    const targetX = prior.x + (trackTarget.x - prior.x) * alpha;
+    const targetY = prior.y + (trackTarget.y - prior.y) * alpha;
     app.view.cx += (targetX - app.view.cx) * 0.08;
     app.view.cy += (targetY - app.view.cy) * 0.08;
     clampView();
@@ -170,7 +305,7 @@ function drawMap(now) {
 
   ctx.clearRect(0, 0, width, height);
 
-  // 1. Engineering Background & Expansive Sector Grounds
+  // 1. Engineering Background Grounds
   const splitX = p.x(50);
   const splitY = p.y(50);
   ctx.fillStyle = "#f8fafc";
@@ -196,121 +331,165 @@ function drawMap(now) {
   }
   ctx.restore();
 
-  // 2. Transparent / Translucent Transit Corridors (Clean, Sleek & Scaled)
-  ctx.save();
-  const roadWidth = p.side * 0.075; // Sleek, proportional road corridors matching the metric scale
-  const vCorridors = [25, 75];
-  const hCorridors = [25, 50, 75];
+  // 1.5 Hexagonal Cellular Cell Geometry ("Cells shape" for 5G Base Stations)
+  const isHexSpot = app.spotlightLine === "hex";
+  const isHoneycomb7 = network.cells.length === 7;
+  for (const cell of network.cells) {
+    const cx = p.x(cell.x), cy = p.y(cell.y);
+    const hexRadius = isHoneycomb7 ? 17.0 : (network.cells.length === 5 ? 21.5 : 28.8);
+    const r = hexRadius * (p.side / 100);
+    const isOverloaded = (cell.load >= 0.82) || (cell.free < 4);
+    const isSelected = cell.id === app.selectedCell;
+    const isDimmed = app.spotlightLine && !isHexSpot;
 
-  // A. Translucent Roadbed Fill
-  ctx.fillStyle = "rgba(226, 232, 240, 0.65)";
-  for (const rx of vCorridors) {
-    ctx.fillRect(p.x(rx) - roadWidth / 2, 0, roadWidth, height);
-  }
-  for (const ry of hCorridors) {
-    ctx.fillRect(0, p.y(ry) - roadWidth / 2, width, roadWidth);
-  }
-
-  // B. Clean Corridor Curbs / Borders
-  ctx.strokeStyle = "#cbd5e1";
-  ctx.lineWidth = 1.0;
-  ctx.beginPath();
-  for (const rx of vCorridors) {
-    const px = p.x(rx);
-    ctx.moveTo(px - roadWidth / 2, 0);
-    ctx.lineTo(px - roadWidth / 2, height);
-    ctx.moveTo(px + roadWidth / 2, 0);
-    ctx.lineTo(px + roadWidth / 2, height);
-  }
-  for (const ry of hCorridors) {
-    const py = p.y(ry);
-    ctx.moveTo(0, py - roadWidth / 2);
-    ctx.lineTo(width, py - roadWidth / 2);
-    ctx.moveTo(0, py + roadWidth / 2);
-    ctx.lineTo(width, py + roadWidth / 2);
-  }
-  ctx.stroke();
-
-  // C. Road Dash Centerlines
-  ctx.strokeStyle = "#94a3b8";
-  ctx.lineWidth = 1.2;
-  ctx.setLineDash([5, 5]);
-  ctx.beginPath();
-  for (const rx of vCorridors) {
-    const px = p.x(rx);
-    ctx.moveTo(px, 0);
-    ctx.lineTo(px, height);
-  }
-  for (const ry of hCorridors) {
-    const py = p.y(ry);
-    ctx.moveTo(0, py);
-    ctx.lineTo(width, py);
-  }
-  ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.restore();
-
-  // Cell Boundaries & Handover Frontier at x = 50, y = 50
-  ctx.save();
-  ctx.strokeStyle = "#64748b";
-  ctx.lineWidth = 1.8;
-  ctx.setLineDash([8, 6]);
-  ctx.beginPath();
-  ctx.moveTo(p.x(50), 0);
-  ctx.lineTo(p.x(50), height);
-  ctx.moveTo(0, p.y(50));
-  ctx.lineTo(width, p.y(50));
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  // Boundary corridor band at y = 50
-  ctx.fillStyle = "rgba(226, 232, 240, 0.4)";
-  ctx.fillRect(0, p.y(54), width, p.y(46) - p.y(54));
-
-  // Boundary Label
-  ctx.font = "800 10px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-  ctx.fillStyle = "#64748b";
-  ctx.letterSpacing = "0.08em";
-  ctx.textAlign = "center";
-  ctx.fillText("CELL BOUNDARY · 3GPP A3 HANDOVER FRONTIER", p.x(50), p.y(50) - 10);
-  ctx.restore();
-
-  // 3. Background Radio Links for other devices
-  for (const ue of network.ues) {
-    if (ue.id === focusId) continue;
-    const pos = pointFor(ue, previous, alpha, p);
-    const cell = network.cells[ue.cell];
     ctx.save();
-    ctx.strokeStyle = ue.allocated > 0 ? "rgba(148, 163, 184, 0.55)" : "rgba(239, 68, 68, 0.35)";
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash(ue.allocated > 0 ? [] : [4, 5]);
+    if (isDimmed) ctx.globalAlpha = 0.22;
     ctx.beginPath();
-    ctx.moveTo(p.x(cell.x), p.y(cell.y));
-    ctx.lineTo(pos.x, pos.y);
+    for (let i = 0; i < 6; i++) {
+      const angle = (Math.PI / 3) * i;
+      const hx = cx + r * Math.cos(angle);
+      const hy = cy + r * Math.sin(angle);
+      if (i === 0) ctx.moveTo(hx, hy);
+      else ctx.lineTo(hx, hy);
+    }
+    ctx.closePath();
+
+    // Subtle translucent hexagonal cell fill
+    ctx.fillStyle = isOverloaded
+      ? "rgba(239, 68, 68, 0.08)"
+      : isSelected
+      ? "rgba(2, 132, 199, 0.09)"
+      : (cell.id % 2 === 0 ? "rgba(241, 245, 249, 0.70)" : "rgba(248, 250, 252, 0.70)");
+    ctx.fill();
+
+    // Hexagonal cell perimeter border
+    ctx.strokeStyle = isHexSpot
+      ? "#0284c7"
+      : isOverloaded
+      ? "rgba(239, 68, 68, 0.75)"
+      : isSelected
+      ? "#0284c7"
+      : "rgba(100, 116, 139, 0.65)";
+    ctx.lineWidth = isHexSpot ? 3.0 : isSelected ? 2.5 : isOverloaded ? 2.2 : 1.8;
+    if (isOverloaded) ctx.setLineDash([6, 4]);
+    else ctx.setLineDash([]);
     ctx.stroke();
+
+    // Hexagon corner vertex pins
+    ctx.fillStyle = isOverloaded ? "#ef4444" : isSelected ? "#0284c7" : "#64748b";
+    for (let i = 0; i < 6; i++) {
+      const angle = (Math.PI / 3) * i;
+      const hx = cx + r * Math.cos(angle);
+      const hy = cy + r * Math.sin(angle);
+      ctx.beginPath();
+      ctx.arc(hx, hy, isHexSpot ? 3.5 : 2.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Hexagon header label
+    ctx.font = "800 10px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+    ctx.fillStyle = isOverloaded ? "#dc2626" : isSelected ? "#0284c7" : "#64748b";
+    ctx.textAlign = "left";
+    const hexLabel = isOverloaded ? `CELL C${cell.id} · OVERLOADED (${cell.free} FREE)` : `CELL C${cell.id}`;
+    ctx.fillText(hexLabel, cx - r * 0.72, cy - r * 0.72);
     ctx.restore();
   }
 
-  // 4. Focus UE Active Serving Carrier Beam with 5G Massive MIMO Beamforming
-  if (focus) {
-    const pos = pointFor(focus, previous, alpha, p);
-    const cell = network.cells[focus.cell];
-    const sx = p.x(cell.x), sy = p.y(cell.y);
-    const connected = focus.allocated > 0;
-    const prior = previous?.ues.find(item => item.id === focus.id) || focus;
-    const quality = prior.signal_quality + (focus.signal_quality - prior.signal_quality) * alpha;
+  // Cell Boundaries & Handover Frontier (drawn for 4-cell grid; 5-cell clusters use hexagonal perimeters)
+  if (network.cells.length <= 4) {
+    const isFrontierSpot = app.spotlightLine === "frontier";
+    ctx.save();
+    if (app.spotlightLine && !isFrontierSpot) ctx.globalAlpha = 0.22;
+    ctx.strokeStyle = isFrontierSpot ? "#f59e0b" : "#64748b";
+    ctx.lineWidth = isFrontierSpot ? 3.0 : 1.8;
+    ctx.setLineDash([8, 6]);
+    ctx.beginPath();
+    ctx.moveTo(p.x(50), 0);
+    ctx.lineTo(p.x(50), height);
+    ctx.moveTo(0, p.y(50));
+    ctx.lineTo(width, p.y(50));
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Boundary corridor band at y = 50
+    ctx.fillStyle = isFrontierSpot ? "rgba(245, 158, 11, 0.14)" : "rgba(226, 232, 240, 0.4)";
+    ctx.fillRect(0, p.y(54), width, p.y(46) - p.y(54));
+
+    // Boundary Label
+    ctx.font = "800 10px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+    ctx.fillStyle = isFrontierSpot ? "#b45309" : "#64748b";
+    ctx.textAlign = "center";
+    ctx.fillText("CELL BOUNDARY · 3GPP A3 HANDOVER FRONTIER (y = 50m)", p.x(50), p.y(50) - 10);
+    ctx.restore();
+  }
+
+  // 2.5 3GPP Xn-C Inter-gNB Optical Fiber Backhaul Mesh (TS 38.423)
+  drawBackhaulMesh(ctx, network, p, visualNow, contract, selectedUE, width, height);
+
+  // 3. Background Radio Links for other devices (Filtered to eliminate visual clutter)
+  for (const ue of network.ues) {
+    if (ue.id === selectedId) continue;
+    const pos = pointFor(ue, previous, alpha, p);
+    const cell = network.cells[ue.cell];
+    const isCongested = ue.allocated === 0;
+    const isSpot = isCongested ? (app.spotlightLine === "congested") : (app.spotlightLine === "active-link");
+    const isHovered = app.hover?.data?.id === ue.id;
+
+    // Only render background links when hovered or explicitly spotlighted in the line guide
+    if (!isSpot && !isHovered) continue;
 
     ctx.save();
-    // Quality-adaptive beam coloration: cyan for high SINR proxy, amber when approaching boundary
+    if (isCongested) {
+      ctx.strokeStyle = "#ef4444";
+      ctx.lineWidth = isSpot ? 3.0 : 1.8;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.moveTo(p.x(cell.x), p.y(cell.y));
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
+
+      const midX = (p.x(cell.x) + pos.x) / 2;
+      const midY = (p.y(cell.y) + pos.y) / 2;
+      roundedLabel(ctx, "0 RB · CONGESTED", midX, midY, "#450a0a", "#fca5a5", "#ef4444", 5, 2);
+    } else {
+      ctx.strokeStyle = isSpot ? "#0284c7" : "rgba(100, 116, 139, 0.45)";
+      ctx.lineWidth = isSpot ? 2.5 : 1.4;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(p.x(cell.x), p.y(cell.y));
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
+
+      const midX = (p.x(cell.x) + pos.x) / 2;
+      const midY = (p.y(cell.y) + pos.y) / 2;
+      roundedLabel(ctx, `${ue.slice.toUpperCase()} (${ue.allocated} RB)`, midX, midY, "rgba(15, 23, 42, 0.92)", "#93c5fd", "#0284c7", 5, 2);
+    }
+    ctx.restore();
+  }
+
+  // 4. Selected UE Active Serving Carrier Beam with 5G Massive MIMO Beamforming
+  if (selectedUE) {
+    const pos = pointFor(selectedUE, previous, alpha, p);
+    const cell = network.cells[selectedUE.cell];
+    const sx = p.x(cell.x), sy = p.y(cell.y);
+    const connected = selectedUE.allocated > 0;
+    const prior = previous?.ues.find(item => item.id === selectedUE.id) || selectedUE;
+    const quality = prior.signal_quality + (selectedUE.signal_quality - prior.signal_quality) * alpha;
+
+    const isBeamSpot = app.spotlightLine === "beam";
+    const isDimmed = app.spotlightLine && !isBeamSpot;
+
+    ctx.save();
+    if (isDimmed) ctx.globalAlpha = 0.22;
     const beamColor = quality < 0.48 ? "#f59e0b" : "#0284c7";
-    const beamGlow = quality < 0.48 ? "rgba(245, 158, 11, 0.28)" : "rgba(2, 132, 199, 0.24)";
+    const beamGlow = quality < 0.48 ? "rgba(245, 158, 11, 0.32)" : "rgba(2, 132, 199, 0.28)";
 
     // Directional 5G Massive MIMO Beamforming Cone
     const dist = Math.hypot(pos.x - sx, pos.y - sy);
     if (dist > 5 && connected) {
       const nx = (pos.x - sx) / dist;
       const ny = (pos.y - sy) / dist;
-      const px = -ny; // perpendicular normal
+      const px = -ny;
       const py = nx;
       const beamSpread = clamp(dist * 0.11, 10, 28);
 
@@ -330,20 +509,41 @@ function drawMap(now) {
 
     // High-contrast core carrier laser beam
     ctx.strokeStyle = connected ? beamGlow : "rgba(239, 68, 68, 0.2)";
-    ctx.lineWidth = 10;
+    ctx.lineWidth = isBeamSpot ? 14 : 10;
     ctx.beginPath();
     ctx.moveTo(sx, sy);
     ctx.lineTo(pos.x, pos.y);
     ctx.stroke();
 
     ctx.strokeStyle = connected ? beamColor : "#ef4444";
-    ctx.lineWidth = 3.5;
+    ctx.lineWidth = isBeamSpot ? 4.5 : 3.5;
     ctx.setLineDash(connected ? [] : [7, 6]);
     ctx.beginPath();
     ctx.moveTo(sx, sy);
     ctx.lineTo(pos.x, pos.y);
     ctx.stroke();
-    ctx.restore();
+
+    // Inline Mid-Beam Label with rich explanatory status
+    const beamMidX = (sx + pos.x) / 2;
+    const beamMidY = (sy + pos.y) / 2;
+    let beamLabel, beamBadgeBg, beamBadgeBorder, beamBadgeText;
+    if (!connected) {
+      beamLabel = `⛔ 5G BEAM CONGESTED: Tower C${cell.id} ➔ UE${selectedUE.id} · 0 RBs (Queueing)`;
+      beamBadgeBg = "#450a0a";
+      beamBadgeBorder = "#ef4444";
+      beamBadgeText = "#fca5a5";
+    } else if (quality < 0.48) {
+      beamLabel = `⚠️ 5G SERVING BEAM: Tower C${cell.id} ➔ UE${selectedUE.id} · Fading (${Math.round(quality * 100)}% RSRP) · 3GPP A3 Handover Triggered`;
+      beamBadgeBg = "#0f172a";
+      beamBadgeBorder = "#f59e0b";
+      beamBadgeText = "#f59e0b";
+    } else {
+      beamLabel = `📡 5G SERVING BEAM: Tower C${cell.id} ➔ UE${selectedUE.id} · Active Link · ${selectedUE.allocated}/${selectedUE.demand} RBs (${Math.round(quality * 100)}% RSRP)`;
+      beamBadgeBg = "rgba(15, 23, 42, 0.94)";
+      beamBadgeBorder = "#0284c7";
+      beamBadgeText = "#38bdf8";
+    }
+    roundedLabel(ctx, beamLabel, beamMidX, beamMidY, beamBadgeBg, beamBadgeText, beamBadgeBorder, 5.5, 2.2);
 
     // Flowing 5G Radio Packets / OFDM Symbols
     if (connected) {
@@ -358,8 +558,6 @@ function drawMap(now) {
         ctx.beginPath();
         ctx.arc(px, py, 4, 0, Math.PI * 2);
         ctx.fill();
-
-        // Packet motion tail
         ctx.strokeStyle = beamColor;
         ctx.lineWidth = 2;
         ctx.globalAlpha = 0.55;
@@ -371,7 +569,7 @@ function drawMap(now) {
       }
     }
 
-    // 3GPP A3 Handover Trigger Alert Tag when approaching cell boundary (hidden once HO is admitted)
+    // 3GPP A3 Handover Trigger Alert Tag when approaching cell boundary
     if (quality < 0.48 && (!app.pulse || (visualNow - app.pulse.at >= 3200))) {
       roundedLabel(
         ctx,
@@ -383,12 +581,61 @@ function drawMap(now) {
         "#f59e0b"
       );
     }
+    ctx.restore();
+  }
+
+  // 4.5 Forward Trajectory Heading & Target Forecast
+  const isTrailSpot = app.spotlightLine === "trail";
+  if (selectedUE && (selectedUE.vx !== 0 || selectedUE.vy !== 0)) {
+    const horizonSteps = 2.8;
+    const pos = pointFor(selectedUE, previous, alpha, p);
+    const predEndX = p.x(selectedUE.x + selectedUE.vx * horizonSteps);
+    const predEndY = p.y(selectedUE.y + selectedUE.vy * horizonSteps);
+
+    ctx.save();
+    if (app.spotlightLine && !isTrailSpot) ctx.globalAlpha = 0.22;
+
+    // Solid directional heading vector (no dotted dashes)
+    ctx.strokeStyle = isTrailSpot ? "#38bdf8" : "rgba(2, 132, 199, 0.75)";
+    ctx.lineWidth = isTrailSpot ? 3.0 : 2.0;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+    ctx.lineTo(predEndX, predEndY);
+    ctx.stroke();
+
+    // Directional arrowhead
+    const ang = Math.atan2(predEndY - pos.y, predEndX - pos.x);
+    ctx.fillStyle = isTrailSpot ? "#38bdf8" : "#0284c7";
+    ctx.beginPath();
+    ctx.moveTo(predEndX, predEndY);
+    ctx.lineTo(predEndX - 9 * Math.cos(ang - 0.45), predEndY - 9 * Math.sin(ang - 0.45));
+    ctx.lineTo(predEndX - 9 * Math.cos(ang + 0.45), predEndY - 9 * Math.sin(ang + 0.45));
+    ctx.closePath();
+    ctx.fill();
+
+    // Predicted target base station closest to forward horizon
+    const predWorldX = selectedUE.x + selectedUE.vx * horizonSteps;
+    const predWorldY = selectedUE.y + selectedUE.vy * horizonSteps;
+    let targetCell = null, minDist = Infinity;
+    for (const c of network.cells) {
+      const d = Math.hypot(c.x - predWorldX, c.y - predWorldY);
+      if (d < minDist) { minDist = d; targetCell = c; }
+    }
+    const targetTag = (targetCell && targetCell.id !== selectedUE.cell)
+      ? ` ➔ APPROACHING TOWER C${targetCell.id}`
+      : ` ➔ IN TOWER C${selectedUE.cell} COVERAGE`;
+
+    // Forecast label with clear explanatory text
+    roundedLabel(ctx, `🧭 PREDICTED HEADING: Vector${targetTag} (Speed: ${selectedUE.speed.toFixed(1)} m/s)`, predEndX, predEndY - 16, "#0f172a", "#38bdf8", "#0284c7", 4.5, 1.8);
+    ctx.restore();
   }
 
   // 5. Anticipatory Reservation Arc (PPO Target Curve)
-  const contract = network.contracts.find(item => item.ue === focusId);
-  if (focus && contract) {
-    const pos = pointFor(focus, previous, alpha, p);
+  const isResSpot = app.spotlightLine === "reservation";
+
+  if (contract && contractUE) {
+    const pos = pointFor(contractUE, previous, alpha, p);
     const target = network.cells[contract.target];
     const tx = p.x(target.x), ty = p.y(target.y);
     const active = contract.active;
@@ -396,25 +643,23 @@ function drawMap(now) {
     const midY = (pos.y + ty) / 2 - (p.side * 0.12);
 
     ctx.save();
-    // Radiant Glow
+    if (app.spotlightLine && !isResSpot) ctx.globalAlpha = 0.22;
     ctx.strokeStyle = active ? "rgba(228, 43, 12, 0.28)" : "rgba(245, 158, 11, 0.22)";
-    ctx.lineWidth = 10;
+    ctx.lineWidth = isResSpot ? 14 : 10;
     ctx.beginPath();
     ctx.moveTo(pos.x, pos.y);
     ctx.quadraticCurveTo(midX, midY, tx, ty);
     ctx.stroke();
 
-    // Main reservation curve
     ctx.strokeStyle = active ? "#e42b0c" : "#f59e0b";
-    ctx.lineWidth = 3.5;
+    ctx.lineWidth = isResSpot ? 4.5 : 3.5;
     ctx.setLineDash(active ? [10, 7] : [5, 7]);
     ctx.beginPath();
     ctx.moveTo(pos.x, pos.y);
     ctx.quadraticCurveTo(midX, midY, tx, ty);
     ctx.stroke();
-    ctx.restore();
 
-    // Animated transmission particle stream along reservation curve
+    // Animated particle stream
     for (let pIdx = 0; pIdx < 2; pIdx++) {
       const tFrac = ((visualNow * 0.00045) + pIdx * 0.5) % 1;
       const p1x = (1 - tFrac) * pos.x + tFrac * midX;
@@ -435,11 +680,13 @@ function drawMap(now) {
     }
 
     // Floating Badge for Reservation at Target Tower
-    const badgeX = tx < width / 2 ? tx + 115 : tx - 115;
-    const badgeText = `${contract.amount} RB ${active ? "HELD" : "REQUESTED"}`;
+    const badgeX = tx < width / 2 ? tx + 120 : tx - 120;
+    const badgeText = active
+      ? `🔒 TOWER C${contract.target}: ${contract.amount} RBs LOCKED FOR UE${selectedId}`
+      : `🔮 TOWER C${contract.target}: ${contract.amount} RBs REQUESTED FOR UE${selectedId}`;
     roundedLabel(
       ctx, badgeText,
-      clamp(badgeX, 90, width - 90),
+      clamp(badgeX, 100, width - 100),
       clamp(ty - 88, 30, height - 30),
       active ? "#0f172a" : "#1e293b",
       "#ffffff",
@@ -449,90 +696,112 @@ function drawMap(now) {
     // Mid-arc Reservation Formula Badge
     roundedLabel(
       ctx,
-      active ? `PPO RESERVED: ${contract.amount} RB (Eq. 21)` : `PPO QUEUED (${contract.amount} RB)`,
-      clamp(midX, 90, width - 90),
+      active
+        ? `🔒 PPO PRE-ALLOCATION ARC: Tower C${contract.target} has locked ${contract.amount} RBs for UE${selectedId} (Eq. 21)`
+        : `🔮 PPO PRE-ALLOCATION ARC: Requesting ${contract.amount} RBs at Tower C${contract.target} (Eq. 21)`,
+      clamp(midX, 100, width - 100),
       clamp(midY - 14, 25, height - 25),
       "rgba(15, 23, 42, 0.94)",
       active ? "#ff7a59" : "#fbbf24",
       active ? "#e42b0c" : "#f59e0b"
     );
+    ctx.restore();
   }
 
   // 6. Cell Base Stations (Towers & Segmented Capacity Meters)
+  // Scaled compactly so the hexagonal cell coverage area is expansive and prominent
   for (const cell of network.cells) {
     const x = p.x(cell.x), y = p.y(cell.y);
     const selected = cell.id === app.selectedCell;
+    const isOverloaded = (cell.load >= 0.82) || (cell.free < 4);
+
+    ctx.save();
+    if (app.spotlightLine && app.spotlightLine !== "hex") ctx.globalAlpha = 0.3;
+
+    // Compact scaling: Cell coverage area is expansive, while base station is a sleek antenna node
+    const towerScale = isHoneycomb7 ? 0.36 : (network.cells.length === 5 ? 0.50 : 0.72);
+    const tw = 110 * towerScale, th = 121 * towerScale;
 
     // Ground platform shadow & pad
-    ctx.save();
     ctx.fillStyle = "rgba(15, 23, 42, 0.06)";
     ctx.beginPath();
-    ctx.ellipse(x, y + 40, 36, 12, 0, 0, Math.PI * 2);
+    ctx.ellipse(x, y + 18, 16, 5, 0, 0, Math.PI * 2);
     ctx.fill();
 
     // Selection Glow Ring
     if (selected) {
+      const selR = 34;
       ctx.fillStyle = "rgba(228, 43, 12, 0.08)";
       ctx.beginPath();
-      ctx.arc(x, y, 74, 0, Math.PI * 2);
+      ctx.arc(x, y, selR, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.strokeStyle = "#e42b0c";
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 1.8;
       ctx.beginPath();
-      ctx.arc(x, y, 74, 0, Math.PI * 2);
+      ctx.arc(x, y, selR, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Delicate radar pulse ripple
       const ripplePhase = (visualNow * 0.001) % 1;
       ctx.strokeStyle = `rgba(228, 43, 12, ${0.4 * (1 - ripplePhase)})`;
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 1.2;
       ctx.beginPath();
-      ctx.arc(x, y, 74 + ripplePhase * 26, 0, Math.PI * 2);
+      ctx.arc(x, y, selR + ripplePhase * 14, 0, Math.PI * 2);
       ctx.stroke();
     }
-    ctx.restore();
+
+    // Overload pulsing warning halo
+    if (isOverloaded) {
+      const warnPhase = (visualNow * 0.002) % 1;
+      ctx.strokeStyle = `rgba(239, 68, 68, ${0.7 * (1 - warnPhase)})`;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.arc(x, y, 26 + warnPhase * 12, 0, Math.PI * 2);
+      ctx.stroke();
+
+      roundedLabel(ctx, `⚠️ C${cell.id} FULL (${cell.free} RB)`, x, y - 46, "#450a0a", "#fca5a5", "#ef4444", 4.5, 1.8);
+    }
 
     // Tower graphic
     if (towerImage.complete && towerImage.naturalWidth) {
-      ctx.drawImage(towerImage, x - 55, y - 68, 110, 121);
+      ctx.drawImage(towerImage, x - tw / 2, y - th * 0.56, tw, th);
     } else {
       ctx.fillStyle = "#334155";
-      ctx.fillRect(x - 12, y - 38, 24, 76);
+      ctx.fillRect(x - 6, y - 20, 12, 40);
     }
 
     // Tower Identifier Badge: "C0", "C1", etc.
-    const badgeW = 66, badgeH = 26;
+    const badgeW = 34, badgeH = 15;
+    const badgeY = y + 15;
     ctx.save();
     ctx.shadowColor = "rgba(15, 23, 42, 0.12)";
-    ctx.shadowBlur = 6;
-    ctx.shadowOffsetY = 2;
+    ctx.shadowBlur = 4;
+    ctx.shadowOffsetY = 1;
     ctx.fillStyle = selected ? "#0f172a" : "#ffffff";
     ctx.beginPath();
-    ctx.roundRect(x - badgeW / 2, y + 36, badgeW, badgeH, 6);
+    ctx.roundRect(x - badgeW / 2, badgeY, badgeW, badgeH, 4);
     ctx.fill();
 
     ctx.shadowColor = "transparent";
-    ctx.strokeStyle = selected ? "#e42b0c" : "#cbd5e1";
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = selected ? "#e42b0c" : (isOverloaded ? "#ef4444" : "#cbd5e1");
+    ctx.lineWidth = 1.2;
     ctx.stroke();
 
-    ctx.fillStyle = selected ? "#ffffff" : "#0f172a";
+    ctx.fillStyle = selected ? "#ffffff" : (isOverloaded ? "#dc2626" : "#0f172a");
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = "800 12.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-    ctx.fillText(`C${cell.id}`, x, y + 49);
+    ctx.font = "800 9.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+    ctx.fillText(`C${cell.id}`, x, badgeY + badgeH / 2);
     ctx.restore();
 
     // Segmented Capacity Gauge HUD
-    const barW = 66, barH = 8, barX = x - barW / 2, barY = y + 68;
+    const barW = 34, barH = 4, barX = x - barW / 2, barY = badgeY + badgeH + 3;
     ctx.save();
     ctx.fillStyle = "#e2e8f0";
     ctx.beginPath();
-    ctx.roundRect(barX, barY, barW, barH, 4);
+    ctx.roundRect(barX, barY, barW, barH, 2);
     ctx.fill();
 
-    // Sliced allocation segments
     let currentX = barX;
     if (cell.slices) {
       for (const s of cell.slices) {
@@ -544,7 +813,7 @@ function drawMap(now) {
             ? "#0284c7"
             : "#059669";
           ctx.beginPath();
-          ctx.roundRect(currentX, barY, segW, barH, 2);
+          ctx.roundRect(currentX, barY, segW, barH, 1.5);
           ctx.fill();
           currentX += segW;
         }
@@ -553,110 +822,183 @@ function drawMap(now) {
       const allocW = (barW * cell.allocated) / cell.capacity;
       ctx.fillStyle = "#334155";
       ctx.beginPath();
-      ctx.roundRect(barX, barY, allocW, barH, 4);
+      ctx.roundRect(barX, barY, allocW, barH, 2);
       ctx.fill();
       currentX += allocW;
     }
 
-    // Held / Reserved RBs (Glowing Vermillion)
     if (cell.reserved > 0) {
       const heldW = (barW * cell.reserved) / cell.capacity;
       ctx.fillStyle = "#ea580c";
       ctx.shadowColor = "rgba(234, 88, 12, 0.6)";
-      ctx.shadowBlur = 4;
+      ctx.shadowBlur = 3;
       ctx.beginPath();
-      ctx.roundRect(currentX, barY, heldW, barH, 2);
+      ctx.roundRect(currentX, barY, heldW, barH, 1.5);
       ctx.fill();
     }
     ctx.restore();
 
     // Capacity text label below gauge
     ctx.save();
-    ctx.font = "800 9px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-    ctx.fillStyle = selected ? "#e42b0c" : "#64748b";
+    ctx.font = "700 8px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+    ctx.fillStyle = selected ? "#e42b0c" : (isOverloaded ? "#dc2626" : "#64748b");
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
-    ctx.fillText(`${cell.allocated + cell.reserved}/${cell.capacity} RB`, x, barY + 11);
+    ctx.fillText(`${cell.allocated + cell.reserved}/${cell.capacity} RB`, x, barY + barH + 2);
+    ctx.restore();
+    ctx.restore();
     ctx.restore();
   }
 
-  // 7. Handover Admitted Transition Animation (Shockwave & Banner)
-  if (app.pulse && visualNow - app.pulse.at < 3200) {
+  // 6.5 Saturated Cell Avoidance Indicator (Drawn when 'overloaded' line is spotlighted)
+  const isOverloadSpot = app.spotlightLine === "overloaded";
+  if (selectedUE && isOverloadSpot) {
+    const uPos = pointFor(selectedUE, previous, alpha, p);
+    let nearestOverloaded = null, minODist = Infinity;
+    for (const cell of network.cells) {
+      const isOverloaded = (cell.load >= 0.82) || (cell.free < 4);
+      if (!isOverloaded || cell.id === selectedUE.cell) continue;
+      const cx = p.x(cell.x), cy = p.y(cell.y);
+      const d = Math.hypot(uPos.x - cx, uPos.y - cy);
+      if (d < minODist) {
+        minODist = d;
+        nearestOverloaded = {cell, cx, cy, d};
+      }
+    }
+
+    if (nearestOverloaded) {
+      const {cell, cx, cy} = nearestOverloaded;
+      ctx.save();
+      ctx.strokeStyle = "rgba(239, 68, 68, 0.85)";
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([6, 5]);
+      ctx.beginPath();
+      ctx.moveTo(uPos.x, uPos.y);
+      ctx.lineTo(cx, cy);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      const midAx = (uPos.x + cx) / 2;
+      const midAy = (uPos.y + cy) / 2;
+      roundedLabel(ctx, `⛔ C${cell.id} SATURATED · AVOIDED BY PPO`, midAx, midAy, "#450a0a", "#fca5a5", "#ef4444", 5, 2);
+      ctx.restore();
+    }
+  }
+
+  // 7. Handover Admitted Transition Animation (Shockwave, Transfer Arc & Celebration)
+  // Strictly scoped to the currently selected device
+  if (app.pulse && app.pulse.ue === selectedId && visualNow - app.pulse.at < 3200) {
     const elapsed = visualNow - app.pulse.at;
     const progress = clamp(elapsed / 3200, 0, 1);
     const source = network.cells[app.pulse.from], target = network.cells[app.pulse.to];
     const sx = p.x(source.x), sy = p.y(source.y) - 10;
     const tx = p.x(target.x), ty = p.y(target.y) - 10;
-    const midX = (sx + tx) / 2, midY = (sy + ty) / 2 - 56;
+    const midX = (sx + tx) / 2, midY = (sy + ty) / 2 - 45;
 
     ctx.save();
     ctx.globalAlpha = 1 - progress * 0.6;
     ctx.strokeStyle = "#10b981";
-    ctx.lineWidth = 5;
+    ctx.lineWidth = 4;
     ctx.shadowColor = "rgba(16, 185, 129, 0.7)";
-    ctx.shadowBlur = 12;
+    ctx.shadowBlur = 10;
 
+    // Glowing handoff transfer arc
     ctx.beginPath();
     ctx.moveTo(sx, sy);
-    ctx.quadraticCurveTo(midX, midY - 25, tx, ty);
+    ctx.quadraticCurveTo(midX, midY - 20, tx, ty);
     ctx.stroke();
 
-    // Arrowhead
-    const angle = Math.atan2(ty - (midY - 25), tx - midX);
+    // Flowing handoff transfer photon particles
+    for (let hIdx = 0; hIdx < 3; hIdx++) {
+      const hFrac = ((visualNow * 0.0008) + hIdx * 0.33) % 1;
+      const h1x = (1 - hFrac) * sx + hFrac * midX;
+      const h1y = (1 - hFrac) * sy + hFrac * (midY - 20);
+      const h2x = (1 - hFrac) * midX + hFrac * tx;
+      const h2y = (1 - hFrac) * (midY - 20) + hFrac * ty;
+      const hx = (1 - hFrac) * h1x + hFrac * h2x;
+      const hy = (1 - hFrac) * h1y + hFrac * h2y;
+      ctx.fillStyle = "#34d399";
+      ctx.beginPath();
+      ctx.arc(hx, hy, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Arrowhead at target tower
+    const angle = Math.atan2(ty - (midY - 20), tx - midX);
     ctx.fillStyle = "#10b981";
     ctx.beginPath();
     ctx.moveTo(tx, ty);
-    ctx.lineTo(tx - 18 * Math.cos(angle - 0.45), ty - 18 * Math.sin(angle - 0.45));
-    ctx.lineTo(tx - 18 * Math.cos(angle + 0.45), ty - 18 * Math.sin(angle + 0.45));
+    ctx.lineTo(tx - 16 * Math.cos(angle - 0.42), ty - 16 * Math.sin(angle - 0.42));
+    ctx.lineTo(tx - 16 * Math.cos(angle + 0.42), ty - 16 * Math.sin(angle + 0.42));
     ctx.closePath();
     ctx.fill();
     ctx.restore();
 
-    // Expanding Boundary Shockwave Wave at handover crossing
-    const waveR = progress * p.side * 0.35;
+    // Mid-arc Handover Transfer Label
+    roundedLabel(ctx, `🔄 5G HANDOVER: Transferring user session C${app.pulse.from} ➔ C${app.pulse.to} (Admission Confirmed · 0ms Drop)`, midX, midY - 32, "#065f46", "#a7f3d0", "#10b981", 6, 2.5);
+
+    // Expanding Boundary Shockwave Wave centered at the target base station tower
+    const waveR = progress * p.side * 0.45;
     ctx.save();
-    ctx.strokeStyle = `rgba(16, 185, 129, ${0.8 * (1 - progress)})`;
-    ctx.lineWidth = 3;
+    ctx.strokeStyle = `rgba(16, 185, 129, ${0.9 * (1 - progress)})`;
+    ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.arc(p.x(25), p.y(50), waveR, 0, Math.PI * 2);
+    ctx.arc(tx, ty, waveR, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.strokeStyle = `rgba(52, 211, 153, ${0.7 * (1 - progress)})`;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(tx, ty, waveR * 0.58, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
 
+    // Target Tower Admitted Beacon Aura
+    ctx.save();
+    ctx.fillStyle = `rgba(16, 185, 129, ${0.15 * (1 - progress)})`;
+    ctx.beginPath();
+    ctx.arc(tx, ty, 50, 0, Math.PI * 2);
+    ctx.fill();
+    roundedLabel(ctx, "✅ 0ms ADMITTED · ONLINE", tx, ty - 68, "#065f46", "#a7f3d0", "#10b981", 5, 2);
+    roundedLabel(ctx, "RELEASED", sx, sy - 68, "#1e293b", "#94a3b8", "#475569", 4.5, 1.8);
+    ctx.restore();
+
     // Top Celebration Banner
-    roundedLabel(ctx, "⚡ PPO HANDOVER ADMITTED · ZERO-DROP SLA PRESERVED (Eq. 22)", width / 2, 42, "#047857", "#ffffff", "#10b981");
+    roundedLabel(ctx, `⚡ 5G PPO HANDOVER: UE${selectedId} Migrated C${app.pulse.from} ➜ C${app.pulse.to} · 0ms ADMISSION · ZERO PACKET LOSS (Eq. 22)`, width / 2, 38, "#047857", "#ffffff", "#10b981", 7, 3);
+
+    // Real-time handover indicator on active device
+    if (selectedUE) {
+      const uPos = pointFor(selectedUE, previous, alpha, p);
+      roundedLabel(ctx, `🔄 0ms HANDOVER: C${app.pulse.from} ➔ C${app.pulse.to}`, uPos.x, uPos.y - 42, "#065f46", "#a7f3d0", "#10b981", 5.5, 2.2);
+    }
   }
 
-  // 8. Focus Vehicle Breadcrumb Motion Trail
-  if (app.trail && app.trail.length > 1) {
+  // 8. Focus Vehicle Motion Trail (Only shown when explicitly spotlighted via Line Guide)
+  if (app.spotlightLine === "trail" && app.trail && app.trail.length > 1) {
     ctx.save();
     ctx.beginPath();
+    let started = false;
     for (let i = 0; i < app.trail.length; i++) {
       const pt = app.trail[i];
+      if (i > 0) {
+        const prev = app.trail[i - 1];
+        if (Math.hypot(pt.x - prev.x, pt.y - prev.y) > 15) {
+          started = false;
+        }
+      }
       const sx = p.x(pt.x), sy = p.y(pt.y);
-      if (i === 0) ctx.moveTo(sx, sy);
-      else ctx.lineTo(sx, sy);
+      if (!started) { ctx.moveTo(sx, sy); started = true; }
+      else { ctx.lineTo(sx, sy); }
     }
-    ctx.strokeStyle = "rgba(228, 43, 12, 0.35)";
-    ctx.lineWidth = 3;
-    ctx.setLineDash([5, 5]);
-    ctx.stroke();
+    ctx.strokeStyle = "rgba(2, 132, 199, 0.45)";
+    ctx.lineWidth = 2.5;
     ctx.setLineDash([]);
-
-    // Small trajectory beads along trail
-    for (let i = 0; i < app.trail.length; i++) {
-      const pt = app.trail[i];
-      const opacity = ((i + 1) / app.trail.length) * 0.45;
-      ctx.fillStyle = `rgba(228, 43, 12, ${opacity})`;
-      ctx.beginPath();
-      ctx.arc(p.x(pt.x), p.y(pt.y), 2.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    ctx.stroke();
     ctx.restore();
   }
 
   // 9. Devices Rendering (Vehicles, Drones, Robots)
-  const focusPosition = focus ? pointFor(focus, previous, alpha, p) : null;
-  const deviceOrder = [...network.ues].sort((a, b) => Number(a.id === focusId) - Number(b.id === focusId));
+  const deviceOrder = [...network.ues].sort((a, b) => Number(a.id === selectedId) - Number(b.id === selectedId));
 
   for (const ue of deviceOrder) {
     const pos = pointFor(ue, previous, alpha, p);
@@ -665,9 +1007,10 @@ function drawMap(now) {
 
     // Quality color gradient
     const ringColor = quality < 0.48 ? "#ef4444" : quality < 0.68 ? "#f59e0b" : "#10b981";
-    const focused = ue.id === focusId;
-    const iconSize = focused ? 48 : 25;
-    const radius = focused ? 34 : 18;
+    const isSelected = ue.id === selectedId;
+    const isScenarioFocus = ue.id === scenarioFocusId;
+    const iconSize = isSelected ? 48 : 25;
+    const radius = isSelected ? 34 : 18;
 
     ctx.save();
     if (app.sliceHighlight) {
@@ -691,8 +1034,8 @@ function drawMap(now) {
     ctx.arc(pos.x, pos.y, radius + 8, 0, Math.PI * 2);
     ctx.fill();
 
-    // Near cell edge warning halo for focus vehicle
-    if (focused && quality < 0.48) {
+    // Signal Quality halo for selected vehicle when RSRP fading
+    if (isSelected && quality < 0.48) {
       const pulsePhase = (visualNow * 0.003) % 1;
       ctx.strokeStyle = `rgba(239, 68, 68, ${0.7 * (1 - pulsePhase)})`;
       ctx.lineWidth = 2.5;
@@ -702,7 +1045,7 @@ function drawMap(now) {
     }
 
     // Directional velocity heading vector
-    if (focused && (ue.vx !== 0 || ue.vy !== 0)) {
+    if (isSelected && (ue.vx !== 0 || ue.vy !== 0)) {
       const angle = Math.atan2(ue.vy, ue.vx);
       const headX = pos.x + Math.cos(angle) * (radius + 12);
       const headY = pos.y + Math.sin(angle) * (radius + 12);
@@ -716,25 +1059,24 @@ function drawMap(now) {
     }
 
     // Outer Vehicle Disk
-    ctx.shadowColor = focused ? "rgba(15, 23, 42, 0.2)" : "rgba(15, 23, 42, 0.08)";
-    ctx.shadowBlur = focused ? 12 : 5;
-    ctx.shadowOffsetY = focused ? 3 : 1;
+    ctx.shadowColor = isSelected ? "rgba(15, 23, 42, 0.2)" : "rgba(15, 23, 42, 0.08)";
+    ctx.shadowBlur = isSelected ? 12 : 5;
+    ctx.shadowOffsetY = isSelected ? 3 : 1;
 
     ctx.fillStyle = "#ffffff";
     ctx.beginPath();
     ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
     ctx.fill();
-
     ctx.shadowColor = "transparent";
 
     // Signal Quality Stroke
     ctx.strokeStyle = ringColor;
-    ctx.lineWidth = focused ? 4 : 2.5;
+    ctx.lineWidth = isSelected ? 4 : 2.5;
     ctx.beginPath();
     ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
     ctx.stroke();
 
-    if (focused) {
+    if (isSelected) {
       ctx.strokeStyle = "#0f172a";
       ctx.lineWidth = 1.8;
       ctx.beginPath();
@@ -766,22 +1108,23 @@ function drawMap(now) {
     ctx.restore();
 
     // Floating Target HUD Tag
-    if (focused) {
+    if (isSelected) {
       roundedLabel(
         ctx,
-        `${ue.slice.toUpperCase()} CAR · UE${ue.id} (${ue.demand} RB SLA)`,
-        clamp(pos.x, 90, width - 90),
-        clamp(pos.y + 56, 24, height - 24),
+        `UE${ue.id} · ${ue.slice.toUpperCase()} (${ue.allocated}/${ue.demand} RB · C${ue.cell})`,
+        clamp(pos.x, 80, width - 80),
+        clamp(pos.y + 38, 20, height - 20),
         "#0f172a",
         "#ffffff",
-        "#38bdf8"
+        "#38bdf8",
+        5, 2
       );
-    } else if (!focusPosition || Math.hypot(pos.x - focusPosition.x, pos.y - focusPosition.y) > 66) {
+    } else {
       ctx.save();
-      ctx.fillStyle = "#475569";
+      ctx.fillStyle = "#64748b";
       ctx.textAlign = "center";
-      ctx.font = "800 10.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-      ctx.fillText(`UE${ue.id}`, pos.x, pos.y + 28);
+      ctx.font = "700 9px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+      ctx.fillText(`UE${ue.id}`, pos.x, pos.y + 22);
       ctx.restore();
     }
   }
@@ -841,10 +1184,10 @@ function drawMap(now) {
     ctx.restore();
   }
 
-  // 11. Top-Right Real-Time Simulation Telemetry HUD on Canvas
-  if (width >= 420 && focus) {
+  // 11. Real-Time Simulation Telemetry HUD on Canvas (Docked in top-left open space)
+  if (width >= 420 && selectedUE) {
     const hudW = 236, hudH = 92;
-    const hudX = width - hudW - 14, hudY = 14;
+    const hudX = 16, hudY = 16;
     ctx.save();
     ctx.shadowColor = "rgba(15, 23, 42, 0.25)";
     ctx.shadowBlur = 12;
@@ -864,24 +1207,28 @@ function drawMap(now) {
 
     ctx.font = "800 10px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
     ctx.fillStyle = "#38bdf8";
-    ctx.fillText("5G PPO RAN TELEMETRY · LIVE HUD", hudX + 12, hudY + 16);
+    ctx.fillText(`5G PPO RAN TELEMETRY · UE${selectedUE.id} (${selectedUE.slice.toUpperCase()})`, hudX + 12, hudY + 16);
 
     ctx.font = "600 9.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
     ctx.fillStyle = "#f1f5f9";
-    const prior = previous?.ues.find(item => item.id === focus.id) || focus;
-    const quality = prior.signal_quality + (focus.signal_quality - prior.signal_quality) * alpha;
-    ctx.fillText(`Serving: Tower C${focus.cell}  ·  RSRP: ${Math.round(quality * 100)}%`, hudX + 12, hudY + 34);
+    const prior = previous?.ues.find(item => item.id === selectedUE.id) || selectedUE;
+    const quality = prior.signal_quality + (selectedUE.signal_quality - prior.signal_quality) * alpha;
+    ctx.fillText(`Serving: Tower C${selectedUE.cell}  ·  RSRP: ${Math.round(quality * 100)}%`, hudX + 12, hudY + 34);
 
-    const contract = network.contracts.find(item => item.ue === focusId);
-    ctx.fillStyle = contract?.active ? "#ff7a59" : "#cbd5e1";
-    const holdStr = contract ? `${contract.amount} RB @ C${contract.target} (${contract.active ? "LOCKED" : "QUEUED"})` : "None (In Coverage)";
+    const ueContract = network.contracts.find(item => item.ue === selectedUE.id) || network.contracts.find(item => item.ue === scenarioFocusId);
+    ctx.fillStyle = ueContract?.active ? "#ff7a59" : "#cbd5e1";
+    const holdStr = ueContract ? `${ueContract.amount} RB @ C${ueContract.target} (${ueContract.active ? "LOCKED" : "QUEUED"})` : "None (In Coverage)";
     ctx.fillText(`PPO Hold: ${holdStr}`, hudX + 12, hudY + 52);
 
     const hoStatus = app.pulse && (visualNow - app.pulse.at < 3200)
       ? "HO ADMITTED (0ms Drop)"
       : quality < 0.48 ? "A3 EVENT TRIGGERED" : "SLA SATISFIED";
     ctx.fillStyle = hoStatus.includes("ADMITTED") ? "#34d399" : hoStatus.includes("TRIGGERED") ? "#fbbf24" : "#94a3b8";
-    ctx.fillText(`Handover: ${hoStatus}  ·  ${focus.allocated}/${focus.demand} RB`, hudX + 12, hudY + 70);
+    ctx.fillText(`Handover: ${hoStatus}  ·  ${selectedUE.allocated}/${selectedUE.demand} RB`, hudX + 12, hudY + 70);
+
+    ctx.font = "500 8.5px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+    ctx.fillStyle = "#64748b";
+    ctx.fillText(`Speed: ${selectedUE.speed.toFixed(1)} m/s · Entity: ${selectedUE.entity_type.toUpperCase()}`, hudX + 12, hudY + 86);
     ctx.restore();
   }
 
@@ -1107,34 +1454,195 @@ function renderTower() {
   }
 }
 
-function buildSparklinePath(historyList, key, width = 180, height = 32, padY = 2) {
-  if (!historyList || historyList.length < 2) {
-    return `M 0,${height - padY} L ${width},${height - padY}`;
+function selectUE(id) {
+  app.selectedUEId = id;
+  app.trail = [];
+  renderDeviceChips();
+  if (app.snapshot) {
+    updateTeaching(app.snapshot);
+  }
+}
+
+function renderDeviceChips() {
+  const host = $("deviceChips");
+  if (!host || !app.snapshot) return;
+  const ues = app.snapshot.proposed.ues;
+  const currentSelected = app.selectedUEId ?? app.snapshot.focus_id;
+  host.replaceChildren();
+
+  for (const ue of ues) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = `device-chip ${ue.id === currentSelected ? "active" : ""} slice-${ue.slice.toLowerCase()}`;
+    const iconSym = ue.entity_type === "car" ? "🚗" : ue.entity_type === "drone" ? "🛸" : "🤖";
+    const isFocus = ue.id === app.snapshot.focus_id;
+    chip.textContent = `${iconSym} UE${ue.id} · ${ue.slice} (${ue.allocated}/${ue.demand} RB)${isFocus ? " ★" : ""}`;
+    chip.title = `Click to inspect UE${ue.id} (${ue.entity_type}, ${ue.slice} slice, ${ue.demand} RB SLA)`;
+    chip.addEventListener("click", () => selectUE(ue.id));
+    host.append(chip);
+  }
+}
+
+function renderTowerNav() {
+  const nav = $("towerNav");
+  if (!nav || !app.snapshot) return;
+  const cells = app.snapshot.proposed.cells;
+  if (nav.children.length === cells.length) {
+    for (const button of nav.querySelectorAll("button")) {
+      const selected = Number(button.dataset.cell) === app.selectedCell;
+      button.classList.toggle("active", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    }
+    return;
+  }
+  nav.replaceChildren();
+  for (const cell of cells) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.cell = String(cell.id);
+    button.textContent = `C${cell.id}`;
+    button.setAttribute("aria-label", `Inspect tower C${cell.id}`);
+    button.addEventListener("click", () => selectTower(cell.id));
+    if (cell.id === app.selectedCell) {
+      button.classList.add("active");
+      button.setAttribute("aria-pressed", "true");
+    }
+    nav.append(button);
+  }
+}
+
+function buildSparklineData(historyList, key, width = 200, height = 44, padY = 4) {
+  const bottomY = height - padY;
+  const topY = padY;
+  const usableH = bottomY - topY;
+  if (!historyList || historyList.length === 0) {
+    return {
+      line: `M 0,${bottomY} L ${width},${bottomY}`,
+      area: `M 0,${bottomY} L ${width},${bottomY} L ${width},${bottomY} Z`,
+      last: {x: width, y: bottomY, val: 0},
+      points: [],
+    };
   }
   const n = historyList.length;
-  const usableH = height - padY * 2;
   const points = historyList.map((item, idx) => {
-    const x = (idx / (n - 1)) * width;
-    const val = clamp(item[key] ?? 0, 0, 1);
-    const y = (height - padY) - val * usableH;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
+    const x = n > 1 ? (idx / (n - 1)) * width : width;
+    const rawVal = item[key] ?? 0;
+    const val = clamp(rawVal, 0, 1);
+    const y = bottomY - val * usableH;
+    return {x, y, val: rawVal, step: item.t ?? idx};
   });
-  return `M ${points.join(" L ")}`;
+  const linePoints = points.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" L ");
+  const line = `M ${linePoints}`;
+  const firstX = points[0].x.toFixed(1);
+  const lastX = points[points.length - 1].x.toFixed(1);
+  const area = `M ${firstX},${bottomY} L ${linePoints} L ${lastX},${bottomY} Z`;
+  const last = points[points.length - 1];
+  return {line, area, last, points};
 }
 
 function updateSparklines(history) {
   if (!history) return;
-  const w = 180, h = 32;
-  const nHsr = $("hsrSparkNormal"), pHsr = $("hsrSparkProposed");
-  const nQos = $("qosSparkNormal"), pQos = $("qosSparkProposed");
+  const w = 200, h = 44, padY = 4;
+  const nHsrData = buildSparklineData(history.normal, "hsr", w, h, padY);
+  const pHsrData = buildSparklineData(history.proposed, "hsr", w, h, padY);
+  const nQosData = buildSparklineData(history.normal, "qos", w, h, padY);
+  const pQosData = buildSparklineData(history.proposed, "qos", w, h, padY);
 
-  if (nHsr && pHsr && history.normal && history.proposed) {
-    nHsr.setAttribute("d", buildSparklinePath(history.normal, "hsr", w, h));
-    pHsr.setAttribute("d", buildSparklinePath(history.proposed, "hsr", w, h));
+  app.sparkData = {
+    hsr: {normal: nHsrData, proposed: pHsrData},
+    qos: {normal: nQosData, proposed: pQosData},
+  };
+
+  const nHsr = $("hsrSparkNormal"), pHsr = $("hsrSparkProposed");
+  const nHsrArea = $("hsrAreaNormal"), pHsrArea = $("hsrAreaProposed");
+  const nHsrDot = $("hsrDotNormal"), pHsrDot = $("hsrDotProposed");
+
+  if (nHsr && nHsrArea) {
+    nHsr.setAttribute("d", nHsrData.line);
+    nHsrArea.setAttribute("d", nHsrData.area);
+    if (nHsrDot && nHsrData.last) {
+      nHsrDot.setAttribute("cx", nHsrData.last.x.toFixed(1));
+      nHsrDot.setAttribute("cy", nHsrData.last.y.toFixed(1));
+    }
   }
-  if (nQos && pQos && history.normal && history.proposed) {
-    nQos.setAttribute("d", buildSparklinePath(history.normal, "qos", w, h));
-    pQos.setAttribute("d", buildSparklinePath(history.proposed, "qos", w, h));
+  if (pHsr && pHsrArea) {
+    pHsr.setAttribute("d", pHsrData.line);
+    pHsrArea.setAttribute("d", pHsrData.area);
+    if (pHsrDot && pHsrData.last) {
+      pHsrDot.setAttribute("cx", pHsrData.last.x.toFixed(1));
+      pHsrDot.setAttribute("cy", pHsrData.last.y.toFixed(1));
+    }
+  }
+
+  const nQos = $("qosSparkNormal"), pQos = $("qosSparkProposed");
+  const nQosArea = $("qosAreaNormal"), pQosArea = $("qosAreaProposed");
+  const nQosDot = $("qosDotNormal"), pQosDot = $("qosDotProposed");
+
+  if (nQos && nQosArea) {
+    nQos.setAttribute("d", nQosData.line);
+    nQosArea.setAttribute("d", nQosData.area);
+    if (nQosDot && nQosData.last) {
+      nQosDot.setAttribute("cx", nQosData.last.x.toFixed(1));
+      nQosDot.setAttribute("cy", nQosData.last.y.toFixed(1));
+    }
+  }
+  if (pQos && pQosArea) {
+    pQos.setAttribute("d", pQosData.line);
+    pQosArea.setAttribute("d", pQosData.area);
+    if (pQosDot && pQosData.last) {
+      pQosDot.setAttribute("cx", pQosData.last.x.toFixed(1));
+      pQosDot.setAttribute("cy", pQosData.last.y.toFixed(1));
+    }
+  }
+}
+
+function setupSparklineScrubbers() {
+  for (const metric of ["hsr", "qos"]) {
+    const svg = $(`${metric}Sparkline`);
+    const tooltip = $(`${metric}ScrubTooltip`);
+    const scrubLine = $(`${metric}ScrubLine`);
+    if (!svg || !tooltip) continue;
+
+    const onMove = e => {
+      const data = app.sparkData?.[metric];
+      if (!data || !data.proposed.points.length) return;
+      const rect = svg.getBoundingClientRect();
+      const clientX = e.clientX ?? e.touches?.[0]?.clientX;
+      if (clientX == null) return;
+      const xPct = clamp((clientX - rect.left) / rect.width, 0, 1);
+      const svgX = xPct * 200;
+
+      const points = data.proposed.points;
+      let closest = points[0], minD = Infinity;
+      for (const pt of points) {
+        const d = Math.abs(pt.x - svgX);
+        if (d < minD) { minD = d; closest = pt; }
+      }
+      const pIndex = points.indexOf(closest);
+      const normalPt = data.normal.points[pIndex] || data.normal.points[data.normal.points.length - 1];
+
+      if (scrubLine) {
+        scrubLine.style.display = "block";
+        scrubLine.setAttribute("x1", closest.x.toFixed(1));
+        scrubLine.setAttribute("x2", closest.x.toFixed(1));
+      }
+
+      const pVal = ((closest.val ?? 0) * 100).toFixed(1);
+      const nVal = ((normalPt?.val ?? 0) * 100).toFixed(1);
+      tooltip.textContent = `t=${closest.step}s · PPO: ${pVal}% · Baseline: ${nVal}%`;
+      tooltip.classList.add("active");
+    };
+
+    const onLeave = () => {
+      if (scrubLine) scrubLine.style.display = "none";
+      tooltip.textContent = metric === "hsr" ? "Target cell admission rate" : "SLA fulfilled on arrival";
+      tooltip.classList.remove("active");
+    };
+
+    svg.addEventListener("pointermove", onMove);
+    svg.addEventListener("pointerleave", onLeave);
+    svg.addEventListener("touchstart", onMove, {passive: true});
+    svg.addEventListener("touchend", onLeave, {passive: true});
   }
 }
 
@@ -1142,18 +1650,130 @@ function focusHandover(events, focusId) {
   return events.find(event => event.startsWith(`HO UE${focusId} `));
 }
 
+function updateLineStatusHud(snapshot, trackedId) {
+  if (!snapshot) return;
+  const proposed = snapshot.proposed;
+  const selectedUE = proposed.ues.find(ue => ue.id === trackedId) || proposed.ues[0];
+  if (!selectedUE) return;
+
+  const targetEl = $("hudSelectedUe");
+  if (targetEl) {
+    const isFocus = selectedUE.id === snapshot.focus_id;
+    targetEl.textContent = `INSPECTING: UE${selectedUE.id} (${selectedUE.slice.toUpperCase()} ${selectedUE.entity_type.toUpperCase()})${isFocus ? " ★" : ""}`;
+  }
+
+  // 1. Serving Beam Status
+  const connected = selectedUE.allocated > 0;
+  const qualityPct = Math.round(selectedUE.signal_quality * 100);
+  const beamCard = $("hudBeamCard");
+  const beamBadge = $("hudBeamBadge");
+  const beamText = $("hudBeamText");
+
+  if (beamCard && beamBadge && beamText) {
+    if (!connected) {
+      beamBadge.className = "hud-badge danger";
+      beamBadge.textContent = "CONGESTED (0 RB)";
+      beamText.textContent = `Tower C${selectedUE.cell} is saturated (100% capacity). 0 RBs allocated; UE${selectedUE.id} is queued.`;
+    } else if (selectedUE.signal_quality < 0.48) {
+      beamBadge.className = "hud-badge warning";
+      beamBadge.textContent = "FADING LINK";
+      beamText.textContent = `Serving Tower C${selectedUE.cell} ➔ UE${selectedUE.id} (${selectedUE.allocated}/${selectedUE.demand} RBs). Signal dropping (${qualityPct}% RSRP); 3GPP A3 Handover Triggered.`;
+    } else {
+      beamBadge.className = "hud-badge active";
+      beamBadge.textContent = "ACTIVE CARRIER";
+      beamText.textContent = `Serving Tower C${selectedUE.cell} ➔ UE${selectedUE.id} · Active Data Link · ${selectedUE.allocated}/${selectedUE.demand} RBs (${qualityPct}% RSRP · SLA Met).`;
+    }
+  }
+
+  // 2. PPO Pre-Allocation Arc Status
+  const contract = proposed.contracts.find(item => item.ue === trackedId);
+  const resCard = $("hudResCard");
+  const resBadge = $("hudResBadge");
+  const resText = $("hudResText");
+
+  if (resCard && resBadge && resText) {
+    if (contract?.active) {
+      resBadge.className = "hud-badge held";
+      resBadge.textContent = "CAPACITY HELD";
+      resText.textContent = `Tower C${contract.target} has locked ${contract.amount} RBs exclusively for UE${selectedUE.id} arrival (Eq. 21 · Guaranteed Handover).`;
+    } else if (contract) {
+      resBadge.className = "hud-badge active";
+      resBadge.textContent = "REQUEST FLIGHT";
+      resText.textContent = `Requesting ${contract.amount} RBs in advance at Tower C${contract.target} via 3GPP Xn backhaul signaling.`;
+    } else {
+      resBadge.className = "hud-badge idle";
+      resBadge.textContent = "IDLE";
+      resText.textContent = `UE${selectedUE.id} is stable inside Tower C${selectedUE.cell} coverage. No reservation needed yet.`;
+    }
+  }
+
+  // 3. 3GPP Xn Backhaul Mesh Status
+  const backhaulCard = $("hudBackhaulCard");
+  const backhaulBadge = $("hudBackhaulBadge");
+  const backhaulText = $("hudBackhaulText");
+
+  if (backhaulCard && backhaulBadge && backhaulText) {
+    const isHoActive = app.pulse && app.pulse.ue === trackedId && (performance.now() - app.pulse.at < 3200);
+    if (isHoActive) {
+      backhaulBadge.className = "hud-badge success";
+      backhaulBadge.textContent = "SESSION TRANSFER";
+      backhaulText.textContent = `Transferring UE${selectedUE.id} data plane context from Tower C${app.pulse.from} to C${app.pulse.to} across optical fiber (0ms Delay).`;
+    } else if (contract?.active) {
+      backhaulBadge.className = "hud-badge active";
+      backhaulBadge.textContent = "HOLD CONFIRMED";
+      backhaulText.textContent = `Inter-gNB optical fiber link active: Tower C${selectedUE.cell} and C${contract.target} confirmed ${contract.amount} RB reservation (TS 38.423).`;
+    } else if (contract) {
+      backhaulBadge.className = "hud-badge active";
+      backhaulBadge.textContent = "SIGNALING";
+      backhaulText.textContent = `Transmitting 3GPP XnAP Handover Preparation Request between C${selectedUE.cell} and C${contract.target}.`;
+    } else {
+      backhaulBadge.className = "hud-badge standby";
+      backhaulBadge.textContent = "MONITORING";
+      backhaulText.textContent = `3GPP Xn-C optical fiber mesh online (TS 38.423). Standby for inter-gNB coordination.`;
+    }
+  }
+
+  // 4. Handover Status
+  const hoCard = $("hudHoCard");
+  const hoBadge = $("hudHoBadge");
+  const hoText = $("hudHoText");
+
+  if (hoCard && hoBadge && hoText) {
+    const isHoActive = app.pulse && app.pulse.ue === trackedId && (performance.now() - app.pulse.at < 3200);
+    if (isHoActive) {
+      hoBadge.className = "hud-badge success";
+      hoBadge.textContent = "0ms ADMITTED";
+      hoText.textContent = `Seamless Handover Executed! Session migrated C${app.pulse.from} ➔ C${app.pulse.to} with zero interruption.`;
+    } else if (contract?.active) {
+      hoBadge.className = "hud-badge held";
+      hoBadge.textContent = "TARGET PREPARED";
+      hoText.textContent = `Target Tower C${contract.target} is armed with ${contract.amount} reserved RBs. Ready for zero-packet-loss switch.`;
+    } else if (selectedUE.signal_quality < 0.48) {
+      hoBadge.className = "hud-badge warning";
+      hoBadge.textContent = "A3 TRIGGERED";
+      hoText.textContent = `Signal fading below threshold. Cell boundary crossed; evaluating candidate target towers.`;
+    } else {
+      hoBadge.className = "hud-badge nominal";
+      hoBadge.textContent = "NOMINAL";
+      hoText.textContent = `Stable connection with Tower C${selectedUE.cell} (${qualityPct}% RSRP · ${selectedUE.speed.toFixed(1)} m/s).`;
+    }
+  }
+}
+
 function updateTeaching(snapshot) {
   const focusId = snapshot.focus_id;
+  const trackedId = app.selectedUEId ?? focusId;
   const proposed = snapshot.proposed;
   const normal = snapshot.normal;
-  const proposedEvent = focusHandover(proposed.events, focusId);
-  const normalEvent = focusHandover(normal.events, focusId);
-  const contract = proposed.contracts.find(item => item.ue === focusId);
+  const proposedEvent = focusHandover(proposed.events, trackedId);
+  const normalEvent = focusHandover(normal.events, trackedId);
+  const contract = proposed.contracts.find(item => item.ue === trackedId);
 
   if (proposedEvent) {
-    const parsed = proposedEvent.match(/^HO UE\d+ C(\d+)->C(\d+) (SUCCESS|FAIL) \((\d+)\/(\d+)RB\)/);
+    const parsed = proposedEvent.match(/^HO UE(\d+) C(\d+)->C(\d+) (SUCCESS|FAIL) \((\d+)\/(\d+)RB\)/);
     const baseline = normalEvent?.match(/(SUCCESS|FAIL) \((\d+)\/(\d+)RB\)/);
     if (parsed) {
+      const hoUeId = Number(parsed[1]);
       app.outcome = {
         normal: baseline ? {
           success: baseline[1] === "SUCCESS",
@@ -1161,17 +1781,18 @@ function updateTeaching(snapshot) {
           demand: Number(baseline[3]),
         } : null,
         proposed: {
-          success: parsed[3] === "SUCCESS",
-          used: Number(parsed[4]),
-          demand: Number(parsed[5]),
+          success: parsed[4] === "SUCCESS",
+          used: Number(parsed[5]),
+          demand: Number(parsed[6]),
         },
-        from: Number(parsed[1]),
-        to: Number(parsed[2]),
+        from: Number(parsed[2]),
+        to: Number(parsed[3]),
+        ue: hoUeId,
       };
       app.outcomeStep = proposed.step;
-      app.pulse = app.outcome.proposed.success
-        ? {from: app.outcome.from, to: app.outcome.to, at: performance.now()}
-        : null;
+      if (app.outcome.proposed.success) {
+        app.pulse = {from: app.outcome.from, to: app.outcome.to, at: performance.now(), ue: hoUeId};
+      }
     }
   }
 
@@ -1179,19 +1800,19 @@ function updateTeaching(snapshot) {
   let explanation = "A solid line is active RB service. Red around the car means it is near the edge of its serving cell in the illustrative signal proxy.";
   let stepIndex = 0;
 
-  if (app.outcome && proposed.step - app.outcomeStep < 18) {
+  if (app.outcome && app.outcome.ue === trackedId && proposed.step - app.outcomeStep < 18) {
     number = "04";
     label = "HANDOVER RESULT";
     stepIndex = 3;
     const {normal: base, proposed: ppo, from, to} = app.outcome;
-    title = `Car moves C${from} → C${to}: ${ppo.success ? "PPO admits it" : "PPO blocks it"}.`;
+    title = `UE${trackedId} moves C${from} → C${to}: ${ppo.success ? "PPO admits it" : "PPO blocks it"}.`;
     explanation = `Same arrival: no reservation could offer only ${base?.used ?? "?"}/${base?.demand ?? "?"} RB (${base?.success ? "admitted" : "blocked"}); PPO granted ${ppo.used}/${ppo.demand} RB (${ppo.success ? "admitted" : "blocked"}). ${ppo.used === ppo.demand ? "Full demand was met." : "Full-demand QoS may still fail."}`;
   } else if (contract?.active) {
     number = "03";
     label = "CAPACITY HELD";
     stepIndex = 2;
     title = `Tower C${contract.target} now holds ${contract.amount} RBs.`;
-    explanation = "The orange path connects the car to its forecast target. The target's RB ledger below shows what was held before arrival.";
+    explanation = `The orange path connects UE${trackedId} to its forecast target. The target's RB ledger below shows what was held before arrival.`;
   } else if (contract) {
     number = "02";
     label = "FORECAST & REQUEST";
@@ -1302,6 +1923,7 @@ function updateTeaching(snapshot) {
   setText("statTotalReserved", `${totalHeld} RB held`);
   setText("statCellLoad", `${avgLoad}%`);
   setText("statCapacityChip", `Pool: ${totalCap} RB`);
+  setText("statCapacityDesc", `Capacity utilization across the ${proposed.cells.length} base stations`);
 
   // Update Live Flight Recorder Event Stream
   const stream = $("liveEventStream");
@@ -1331,6 +1953,9 @@ function updateTeaching(snapshot) {
 
   // Update Rolling Sparklines
   updateSparklines(snapshot.history);
+
+  // Update Live Line Activity HUD for selected device
+  updateLineStatusHud(snapshot, trackedId);
 }
 
 function acceptSnapshot(snapshot) {
@@ -1339,13 +1964,16 @@ function acceptSnapshot(snapshot) {
   app.frameStart = performance.now();
   setText("simTime", `${snapshot.proposed.time.toFixed(1)} s`);
 
-  const focus = snapshot.proposed.ues.find(u => u.id === snapshot.focus_id);
+  const trackedId = app.selectedUEId ?? snapshot.focus_id;
+  const focus = snapshot.proposed.ues.find(u => u.id === trackedId);
   if (focus) {
     app.trail.push({x: focus.x, y: focus.y});
     if (app.trail.length > 25) app.trail.shift();
   }
 
   updateTeaching(snapshot);
+  renderDeviceChips();
+  renderTowerNav();
   renderTower();
 }
 
@@ -1381,6 +2009,8 @@ async function startScenario() {
   app.pulse = null;
   app.trail = [];
   app.hover = null;
+  app.selectedUEId = null;
+  app.spotlightLine = null;
   app.view = {zoom: 1, cx: 50, cy: 50};
   app.selectedCell = 0;
   clampView();
@@ -1467,7 +2097,7 @@ function setupMapInteractions() {
   if (handoverBtn) {
     handoverBtn.addEventListener("click", () => {
       app.autoTrack = false;
-      app.view = {zoom: 1.5, cx: 36, cy: 50};
+      app.view = {zoom: 1.5, cx: 28, cy: 50};
       clampView();
     });
   }
@@ -1522,28 +2152,30 @@ function setupMapInteractions() {
     });
   }, {passive: false});
 
-  canvas.addEventListener("pointerdown", event => {
+  const onStart = (clientX, clientY, pointerId) => {
     app.autoTrack = false;
-    canvas.setPointerCapture(event.pointerId);
     canvas.classList.add("dragging");
-    app.drag = {x: event.clientX, y: event.clientY, moved: false};
-  });
+    app.drag = {x: clientX, y: clientY, moved: false};
+    if (pointerId != null) {
+      try { canvas.setPointerCapture(pointerId); } catch {}
+    }
+  };
 
-  canvas.addEventListener("pointermove", event => {
+  const onMove = (clientX, clientY) => {
     const rect = canvas.getBoundingClientRect();
     const p = projection(rect.width, rect.height);
-    const mx = event.clientX - rect.left;
-    const my = event.clientY - rect.top;
+    const mx = clientX - rect.left;
+    const my = clientY - rect.top;
 
     if (app.drag) {
-      const dx = event.clientX - app.drag.x;
-      const dy = event.clientY - app.drag.y;
+      const dx = clientX - app.drag.x;
+      const dy = clientY - app.drag.y;
       if (Math.abs(dx) + Math.abs(dy) > 3) app.drag.moved = true;
       app.view.cx -= (dx * 100) / p.side;
       app.view.cy -= (dy * 100) / p.side;
       clampView();
-      app.drag.x = event.clientX;
-      app.drag.y = event.clientY;
+      app.drag.x = clientX;
+      app.drag.y = clientY;
       app.hover = null;
       return;
     }
@@ -1568,43 +2200,65 @@ function setupMapInteractions() {
       }
     }
     app.hover = found;
-  });
+  };
 
-  canvas.addEventListener("pointerleave", () => {
-    app.hover = null;
-  });
-
-  canvas.addEventListener("pointerup", event => {
+  const onEnd = (clientX, clientY) => {
     canvas.classList.remove("dragging");
     const wasClick = app.drag && !app.drag.moved;
     app.drag = null;
     if (!wasClick || !app.snapshot) return;
     const rect = canvas.getBoundingClientRect();
     const p = projection(rect.width, rect.height);
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
-    const closest = app.snapshot.proposed.cells
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+
+    const closestCell = app.snapshot.proposed.cells
       .map(cell => ({
         id: cell.id,
         distance: Math.hypot(p.x(cell.x) - x, p.y(cell.y) - y),
       }))
       .sort((a, b) => a.distance - b.distance)[0];
-    if (closest && closest.distance < 72) selectTower(closest.id);
-  });
 
-  canvas.addEventListener("pointercancel", () => {
-    app.drag = null;
-    canvas.classList.remove("dragging");
-  });
+    let clickedUE = null, minUeDist = 999;
+    for (const ue of app.snapshot.proposed.ues) {
+      const dist = Math.hypot(p.x(ue.x) - x, p.y(ue.y) - y);
+      if (dist < 28 && dist < minUeDist) {
+        minUeDist = dist;
+        clickedUE = ue;
+      }
+    }
+
+    if (clickedUE && (!closestCell || minUeDist < closestCell.distance || closestCell.distance > 30)) {
+      selectUE(clickedUE.id);
+      return;
+    }
+
+    if (closestCell && closestCell.distance < 72) {
+      selectTower(closestCell.id);
+    }
+  };
+
+  canvas.addEventListener("pointerdown", e => onStart(e.clientX, e.clientY, e.pointerId));
+  canvas.addEventListener("mousedown", e => onStart(e.clientX, e.clientY));
+  canvas.addEventListener("pointermove", e => onMove(e.clientX, e.clientY));
+  canvas.addEventListener("mousemove", e => onMove(e.clientX, e.clientY));
+  canvas.addEventListener("pointerleave", () => { app.hover = null; });
+  canvas.addEventListener("pointerup", e => onEnd(e.clientX, e.clientY));
+  canvas.addEventListener("mouseup", e => onEnd(e.clientX, e.clientY));
+  canvas.addEventListener("pointercancel", () => { app.drag = null; canvas.classList.remove("dragging"); });
 
   const nav = $("towerNav");
-  for (let id = 0; id < 4; id++) {
+  for (let id = 0; id < 7; id++) {
     const button = document.createElement("button");
     button.type = "button";
     button.dataset.cell = String(id);
     button.textContent = `C${id}`;
     button.setAttribute("aria-label", `Inspect tower C${id}`);
     button.addEventListener("click", () => selectTower(id));
+    if (id === 0) {
+      button.classList.add("active");
+      button.setAttribute("aria-pressed", "true");
+    }
     nav.append(button);
   }
   clampView();
@@ -1612,6 +2266,7 @@ function setupMapInteractions() {
 
 async function init() {
   setupMapInteractions();
+  setupSparklineScrubbers();
   $("playBtn").addEventListener("click", togglePlayback);
   $("scenario").addEventListener("change", startScenario);
 
@@ -1626,6 +2281,21 @@ async function init() {
     tag.style.cursor = "pointer";
     tag.addEventListener("pointerenter", () => { app.sliceHighlight = sliceKey; });
     tag.addEventListener("pointerleave", () => { app.sliceHighlight = null; });
+  });
+
+  // Interactive Line Guide Spotlight
+  const legendPills = document.querySelectorAll(".legend-pill");
+  legendPills.forEach(pill => {
+    const key = pill.dataset.line;
+    if (!key) return;
+    pill.addEventListener("pointerenter", () => { app.spotlightLine = key; });
+    pill.addEventListener("pointerleave", () => {
+      if (app.spotlightLine === key) app.spotlightLine = null;
+    });
+    pill.addEventListener("click", () => {
+      app.spotlightLine = (app.spotlightLine === key) ? null : key;
+      legendPills.forEach(p => p.classList.toggle("active", p.dataset.line === app.spotlightLine));
+    });
   });
 
   requestAnimationFrame(frame);

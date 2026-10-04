@@ -25,7 +25,8 @@ class RANHandoverEnv:
 
     def __init__(self, config: SimConfig | None = None):
         self.cfg = config or SimConfig()
-        self.centers = np.array([[25., 25.], [75., 25.], [25., 75.], [75., 75.]])
+        default_centers = np.array([[25., 25.], [75., 25.], [25., 75.], [75., 75.]])
+        self.centers = np.array(self.cfg.centers, dtype=float) if self.cfg.centers is not None else default_centers
         self.reset(self.cfg.seed)
 
     def reset(self, seed: int | None = None) -> tuple[np.ndarray, np.ndarray, dict]:
@@ -49,7 +50,7 @@ class RANHandoverEnv:
             vel = speed * np.array([np.cos(angle), np.sin(angle)])
             cell = self._nearest_cell(pos)
             self.ues.append(UE(uid, sid, pos, vel, cell))
-        self.allocations = np.zeros(4, dtype=int)
+        self.allocations = np.zeros(len(self.centers), dtype=int)
         self.ue_allocations: dict[int, int] = {}
         self._sample_demands()
         self.interval_demands = {ue.uid: ue.demand for ue in self.ues}
@@ -67,7 +68,7 @@ class RANHandoverEnv:
             ue.demand = max(1, int(round(self.rng.normal(profile.demand_mean * phase * burst, profile.demand_std))))
 
     def _reservation_totals(self) -> np.ndarray:
-        totals = np.zeros(4, dtype=int)
+        totals = np.zeros(len(self.centers), dtype=int)
         for r in self.reservations:
             if r.active:
                 totals[r.target] += r.activated_amount
@@ -77,7 +78,7 @@ class RANHandoverEnv:
         held = self._reservation_totals()
         self.allocations[:] = 0
         ue_alloc: dict[int, int] = {}
-        for cell in range(4):
+        for cell in range(len(self.centers)):
             budget = max(0, self.cfg.cell_capacity - int(held[cell]))
             members = [u for u in self.ues if u.cell == cell]
             members.sort(key=lambda u: (-self.cfg.slices[u.slice_id].priority, u.uid))
@@ -109,7 +110,7 @@ class RANHandoverEnv:
         uncertainty = float(np.clip(0.05 + self.cfg.prediction_noise * regime, 0.02, 0.40))
         predicted_target = actual_target
         if self.pred_rng.random() < uncertainty:
-            choices = [c for c in range(4) if c != ue.cell]
+            choices = [c for c in range(len(self.centers)) if c != ue.cell]
             predicted_target = int(self.pred_rng.choice(choices))
         noisy_tth = int(np.clip(round(tth + self.pred_rng.normal(0, 0.7 + 2 * uncertainty)), 1, self.cfg.horizon))
         profile = self.cfg.slices[ue.slice_id]

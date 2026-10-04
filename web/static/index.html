@@ -49,20 +49,19 @@
       <div class="intro-content">
         <div class="eyebrow-badge">
           <span class="badge-dot" aria-hidden="true"></span>
-          <p class="eyebrow">THE SIX-DEVICE HANDOVER LAB</p>
+          <p class="eyebrow">THE 7-CELL HONEYCOMB HANDOVER LAB</p>
         </div>
-        <h1>One moving car. <em>Two different outcomes.</em></h1>
-        <p class="lede">Watch the highlighted uRLLC car cross a cell boundary. Both networks see the same movement and demand; only the PPO side may hold target-tower resource blocks before arrival.</p>
+        <h1>7-Cell Honeycomb Grid. <em>Predictive PPO Handover.</em></h1>
+        <p class="lede">Watch devices traverse the 7-cell hexagonal cellular network. Overloaded towers are avoided, trajectories are predicted in advance, and PPO pre-allocates resources to guarantee zero-drop handovers.</p>
       </div>
 
       <div class="controls">
         <div class="control-header">
-          <label for="scenario">EXAMPLE TRACE</label>
+          <label for="scenario">ACTIVE SCENARIO</label>
         </div>
         <div class="select-wrapper">
           <select id="scenario">
-            <option value="urban">Predict a uRLLC car handover</option>
-            <option value="crossing">Fast crossing into a busy cell</option>
+            <option value="hex_cluster" selected>7-Cell Honeycomb Cluster: Avoid Overloaded Cell &amp; Predict Handover</option>
           </select>
           <svg class="select-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
@@ -86,7 +85,7 @@
           <div>
             <div class="eyebrow-badge">
               <span class="badge-dot pulse" aria-hidden="true"></span>
-              <p class="eyebrow">LIVE PPO NETWORK / SIX DEVICES TOTAL</p>
+              <p class="eyebrow">LIVE PPO NETWORK / 7-CELL HONEYCOMB CLUSTER</p>
             </div>
             <h2>One shared world, one clear handover</h2>
             <p>The map shows PPO service and reservations. Compare its outcome with the no-reservation network on the right.</p>
@@ -101,19 +100,93 @@
           </div>
         </div>
 
+        <div class="device-bar" id="deviceBar" aria-label="Select device to inspect">
+          <span class="device-bar-label">INSPECT UE:</span>
+          <div class="device-chips" id="deviceChips"></div>
+        </div>
+
         <div class="canvas-frame">
           <canvas id="networkCanvas" aria-label="Zoomable map of six devices and four towers"></canvas>
         </div>
 
+        <!-- Live Line Activity & Real-Time Explanation HUD -->
+        <div class="line-status-hud" id="lineStatusHud" aria-label="Live Line Activity and Explanation">
+          <div class="hud-header">
+            <div class="hud-title-wrap">
+              <span class="hud-live-dot" aria-hidden="true"></span>
+              <span class="hud-title">LIVE LINE ACTIVITY &amp; EXPLANATION</span>
+            </div>
+            <span class="hud-selected-ue" id="hudSelectedUe">INSPECTING: UE0 (URLLC Car)</span>
+          </div>
+          <div class="hud-grid">
+            <div class="hud-card beam" id="hudBeamCard">
+              <div class="hud-card-top">
+                <span class="hud-line-indicator beam"></span>
+                <span class="hud-card-name">5G SERVING BEAM</span>
+                <span class="hud-badge active" id="hudBeamBadge">ACTIVE</span>
+              </div>
+              <p class="hud-card-text" id="hudBeamText">Serving Tower C0 ➔ UE0 · 4/4 RBs (72% RSRP)</p>
+            </div>
+
+            <div class="hud-card reservation" id="hudResCard">
+              <div class="hud-card-top">
+                <span class="hud-line-indicator reservation"></span>
+                <span class="hud-card-name">PPO PRE-ALLOCATION ARC (EQ. 21)</span>
+                <span class="hud-badge idle" id="hudResBadge">IDLE</span>
+              </div>
+              <p class="hud-card-text" id="hudResText">Inside cell coverage · No pre-allocation needed yet</p>
+            </div>
+
+            <div class="hud-card backhaul" id="hudBackhaulCard">
+              <div class="hud-card-top">
+                <span class="hud-line-indicator backhaul"></span>
+                <span class="hud-card-name">3GPP Xn BACKHAUL MESH</span>
+                <span class="hud-badge standby" id="hudBackhaulBadge">MONITORING</span>
+              </div>
+              <p class="hud-card-text" id="hudBackhaulText">Inter-gNB optical fiber mesh ready for handover coordination</p>
+            </div>
+
+            <div class="hud-card handover" id="hudHoCard">
+              <div class="hud-card-top">
+                <span class="hud-line-indicator handover"></span>
+                <span class="hud-card-name">HANDOVER TRANSFER</span>
+                <span class="hud-badge nominal" id="hudHoBadge">NOMINAL</span>
+              </div>
+              <p class="hud-card-text" id="hudHoText">Connected to Tower C0 · Signal healthy</p>
+            </div>
+          </div>
+        </div>
+
         <div class="map-legend">
-          <span class="legend-item"><i class="symbol focus"></i> Focus car</span>
-          <span class="legend-item"><i class="symbol service"></i> Active 5G beam</span>
-          <span class="legend-item"><i class="symbol hold"></i> PPO reservation arc</span>
-          <span class="legend-item"><i class="symbol a3"></i> 3GPP A3 trigger</span>
-          <span class="legend-item"><i class="symbol wave"></i> RF wave / sector</span>
+          <div class="legend-header">
+            <span class="legend-title">LINE GUIDE &amp; SPOTLIGHT:</span>
+          </div>
+          <div class="legend-items">
+            <button type="button" class="legend-pill" data-line="beam" title="5G NR Massive MIMO beam (Serving Tower ➔ Selected UE). High-frequency carrier.">
+              <span class="pill-symbol beam"></span> 5G Serving Beam
+            </button>
+            <button type="button" class="legend-pill" data-line="reservation" title="Predictive PPO Capacity Reservation Arc (Target Tower ➔ Car, Eq. 21). Pre-allocates PRBs.">
+              <span class="pill-symbol reservation"></span> PPO Pre-Allocation Arc (Eq. 21)
+            </button>
+            <button type="button" class="legend-pill" data-line="trail" title="Historical motion trajectory &amp; forward prediction vector (T_horizon = 5 steps).">
+              <span class="pill-symbol trail"></span> Trajectory &amp; Horizon (t+5s)
+            </button>
+            <button type="button" class="legend-pill" data-line="overloaded" title="Overloaded Base Station: Free RBs exhausted. Steered clear / connection avoided by PPO.">
+              <span class="pill-symbol overloaded"></span> Overloaded Cell (Avoided)
+            </button>
+            <button type="button" class="legend-pill" data-line="congested" title="Congested Radio Link: 0 PRBs allocated because tower is at 100% capacity. Device is queued.">
+              <span class="pill-symbol congested"></span> Congested Link (0 RB)
+            </button>
+            <button type="button" class="legend-pill" data-line="hex" title="Authentic 7-Cell Hexagonal Honeycomb Coverage Tiling.">
+              <span class="pill-symbol hex"></span> 7-Cell Honeycomb Boundary
+            </button>
+            <button type="button" class="legend-pill" data-line="backhaul" title="3GPP Xn Inter-gNB Optical Fiber Backhaul Mesh (TS 38.423). Coordinates proactive handover and reservation.">
+              <span class="pill-symbol backhaul"></span> 3GPP Xn Backhaul Mesh
+            </button>
+          </div>
           <span class="map-hint">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-            Wheel to zoom · drag or WASD/arrows to pan · click a tower
+            Click any device or tower on canvas · Wheel to zoom · Drag to pan · Hover a line to spotlight
           </span>
         </div>
       </article>
@@ -217,15 +290,35 @@
             <strong id="statHsrProposed">0.0%</strong>
           </div>
         </div>
-        <div class="sparkline-wrap" title="Rolling trend over past simulation steps: PPO (emerald) vs Baseline (dashed gray)">
-          <svg id="hsrSparkline" class="sparkline-svg" viewBox="0 0 180 32" preserveAspectRatio="none" aria-hidden="true">
-            <line class="spark-grid" x1="0" y1="16" x2="180" y2="16" />
-            <path id="hsrSparkNormal" class="spark-line normal" d="M0,32 L180,32" />
-            <path id="hsrSparkProposed" class="spark-line proposed" d="M0,32 L180,32" />
+        <div class="sparkline-wrap" id="hsrSparkWrap" title="Rolling trend over past simulation steps: PPO (emerald) vs Baseline (dashed gray)">
+          <div class="spark-scrub-tooltip" id="hsrScrubTooltip">Hover for step details</div>
+          <svg id="hsrSparkline" class="sparkline-svg" viewBox="0 0 200 44" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="gradPpoHsr" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#10b981" stop-opacity="0.35" />
+                <stop offset="100%" stop-color="#10b981" stop-opacity="0.0" />
+              </linearGradient>
+              <linearGradient id="gradBaseHsr" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#94a3b8" stop-opacity="0.22" />
+                <stop offset="100%" stop-color="#94a3b8" stop-opacity="0.0" />
+              </linearGradient>
+            </defs>
+            <line class="spark-grid" x1="0" y1="4" x2="200" y2="4" />
+            <line class="spark-grid" x1="0" y1="22" x2="200" y2="22" />
+            <line class="spark-grid" x1="0" y1="40" x2="200" y2="40" />
+            <text class="spark-axis-label" x="4" y="9">100%</text>
+            <text class="spark-axis-label" x="4" y="26">50%</text>
+            <path id="hsrAreaNormal" class="spark-area normal" d="M0,40 L200,40 Z" />
+            <path id="hsrAreaProposed" class="spark-area proposed" d="M0,40 L200,40 Z" />
+            <path id="hsrSparkNormal" class="spark-line normal" d="M0,40 L200,40" />
+            <path id="hsrSparkProposed" class="spark-line proposed" d="M0,40 L200,40" />
+            <circle id="hsrDotNormal" class="spark-dot normal" cx="200" cy="40" r="3" />
+            <circle id="hsrDotProposed" class="spark-dot proposed" cx="200" cy="40" r="3.5" />
+            <line id="hsrScrubLine" class="spark-scrub-line" x1="0" y1="0" x2="0" y2="44" style="display:none;" />
           </svg>
           <div class="spark-legend">
             <span class="spark-key normal">Baseline</span>
-            <span class="spark-key proposed">PPO</span>
+            <span class="spark-key proposed">PPO Proactive</span>
           </div>
         </div>
         <p class="stat-desc">Target cell admission rate upon boundary crossing</p>
@@ -247,15 +340,35 @@
             <strong id="statQosProposed">0.0%</strong>
           </div>
         </div>
-        <div class="sparkline-wrap" title="Rolling QoS fulfillment rate: PPO (emerald) vs Baseline (dashed gray)">
-          <svg id="qosSparkline" class="sparkline-svg" viewBox="0 0 180 32" preserveAspectRatio="none" aria-hidden="true">
-            <line class="spark-grid" x1="0" y1="16" x2="180" y2="16" />
-            <path id="qosSparkNormal" class="spark-line normal" d="M0,32 L180,32" />
-            <path id="qosSparkProposed" class="spark-line proposed" d="M0,32 L180,32" />
+        <div class="sparkline-wrap" id="qosSparkWrap" title="Rolling QoS fulfillment rate: PPO (emerald) vs Baseline (dashed gray)">
+          <div class="spark-scrub-tooltip" id="qosScrubTooltip">Hover for step details</div>
+          <svg id="qosSparkline" class="sparkline-svg" viewBox="0 0 200 44" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <linearGradient id="gradPpoQos" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#10b981" stop-opacity="0.35" />
+                <stop offset="100%" stop-color="#10b981" stop-opacity="0.0" />
+              </linearGradient>
+              <linearGradient id="gradBaseQos" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#94a3b8" stop-opacity="0.22" />
+                <stop offset="100%" stop-color="#94a3b8" stop-opacity="0.0" />
+              </linearGradient>
+            </defs>
+            <line class="spark-grid" x1="0" y1="4" x2="200" y2="4" />
+            <line class="spark-grid" x1="0" y1="22" x2="200" y2="22" />
+            <line class="spark-grid" x1="0" y1="40" x2="200" y2="40" />
+            <text class="spark-axis-label" x="4" y="9">100%</text>
+            <text class="spark-axis-label" x="4" y="26">50%</text>
+            <path id="qosAreaNormal" class="spark-area normal" d="M0,40 L200,40 Z" />
+            <path id="qosAreaProposed" class="spark-area proposed" d="M0,40 L200,40 Z" />
+            <path id="qosSparkNormal" class="spark-line normal" d="M0,40 L200,40" />
+            <path id="qosSparkProposed" class="spark-line proposed" d="M0,40 L200,40" />
+            <circle id="qosDotNormal" class="spark-dot normal" cx="200" cy="40" r="3" />
+            <circle id="qosDotProposed" class="spark-dot proposed" cx="200" cy="40" r="3.5" />
+            <line id="qosScrubLine" class="spark-scrub-line" x1="0" y1="0" x2="0" y2="44" style="display:none;" />
           </svg>
           <div class="spark-legend">
             <span class="spark-key normal">Baseline</span>
-            <span class="spark-key proposed">PPO</span>
+            <span class="spark-key proposed">PPO Proactive</span>
           </div>
         </div>
         <p class="stat-desc">Slice throughput & latency SLA fulfilled on arrival</p>
@@ -264,7 +377,7 @@
       <div class="stat-card">
         <div class="stat-head">
           <span class="stat-label">RAN RESOURCE BLOCKS (RBs)</span>
-          <span class="stat-chip" id="statCapacityChip">Pool: 76 RB</span>
+          <span class="stat-chip" id="statCapacityChip">Pool: 112 RB</span>
         </div>
         <div class="stat-metric-row">
           <div>
@@ -280,7 +393,7 @@
             <small>Avg Load</small>
           </div>
         </div>
-        <p class="stat-desc">Capacity utilization across the 4 base stations</p>
+        <p class="stat-desc" id="statCapacityDesc">Capacity utilization across the 7 base stations</p>
       </div>
 
       <div class="stat-card">

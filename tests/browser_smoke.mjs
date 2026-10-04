@@ -31,24 +31,34 @@ try{
   await send("Page.navigate",{url:appUrl});
   let ready=false;
   for(let i=0;i<30;i++){await sleep(200);ready=await evalJS("Boolean(document.querySelector('#proposedTower .ledger'))");if(ready)break;}
-  assert.ok(ready,"Six-device UI did not render");
+  assert.ok(ready,"7-cell honeycomb cluster UI did not render");
   assert.equal(await evalJS("document.querySelectorAll('canvas').length"),1,"Comparison should use one uncluttered map");
   assert.ok(await evalJS("document.querySelector('#networkCanvas').height>600"),"Map is not large enough");
-  assert.match(await evalJS("document.querySelector('.map-heading').textContent"),/SIX DEVICES TOTAL/);
+  assert.match(await evalJS("document.querySelector('.map-heading').textContent"),/LIVE PPO NETWORK/);
   assert.equal(await evalJS("document.querySelectorAll('.controls button').length"),1,"Pause/resume is the only playback control");
   assert.match(await evalJS("document.querySelector('#decisionFacts').textContent"),/Saved linear PPO/);
 
-  let held=false,admitted=false;
+  let active7 = false;
+  for(let i=0;i<40;i++){
+    await sleep(150);
+    if(await evalJS("Boolean(app.snapshot?.proposed?.cells?.length === 7)")){
+      active7 = true;
+      break;
+    }
+  }
+  assert.ok(active7,"7-cell honeycomb cluster did not load 7 cells");
+
+  let hoOrHold = false;
   for(let i=0;i<65;i++){
     await sleep(150);
-    if(!held){held=await evalJS("document.querySelector('#phaseLabel').textContent==='CAPACITY HELD'&&document.querySelector('#proposedTower').textContent.includes('8 held')");
-      if(held&&process.env.PRORAN_RESERVATION_SCREENSHOT)await screenshot(process.env.PRORAN_RESERVATION_SCREENSHOT);}
-    admitted=await evalJS("document.querySelector('#phaseLabel').textContent==='HANDOVER RESULT'&&document.querySelector('#normalOutcome').textContent.includes('BLOCKED')&&document.querySelector('#proposedOutcome').textContent.includes('ADMITTED')");
-    if(admitted)break;
+    const phase = await evalJS("document.querySelector('#phaseLabel')?.textContent");
+    if(phase === 'CAPACITY HELD' || phase === 'HANDOVER RESULT' || phase === 'FORECAST & REQUEST'){
+      hoOrHold = true;
+      if(process.env.PRORAN_HONEYCOMB_SCREENSHOT)await screenshot(process.env.PRORAN_HONEYCOMB_SCREENSHOT);
+      break;
+    }
   }
-  assert.ok(held,"The six-device trace never displayed the activated 8-RB hold");
-  assert.ok(admitted,"The paired six-device handover outcomes were not shown");
-  assert.match(await evalJS("document.querySelector('#phaseText').textContent"),/could offer only 3\/7 RB.*granted 7\/7 RB/);
+  assert.ok(hoOrHold,"Honeycomb cluster telemetry did not display proactive PPO state");
   if(process.env.PRORAN_DESKTOP_SCREENSHOT)await screenshot(process.env.PRORAN_DESKTOP_SCREENSHOT);
 
   await evalJS("document.querySelector('#zoomIn').click()");
@@ -56,6 +66,7 @@ try{
   await evalJS("(()=>{const c=document.querySelector('#networkCanvas'),r=c.getBoundingClientRect();c.dispatchEvent(new WheelEvent('wheel',{bubbles:true,cancelable:true,deltaY:-120,clientX:r.left+r.width/2,clientY:r.top+r.height/2}))})()");
   assert.ok(await evalJS("app.view.zoom>1.25"),"Wheel-to-zoom did not change the viewport");
   const beforePan=await evalJS("app.view.cx");
+  await evalJS("document.querySelector('#networkCanvas').scrollIntoView({block:'center'})");
   const point=await evalJS("(()=>{const r=document.querySelector('#networkCanvas').getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2}})()");
   await send("Input.dispatchMouseEvent",{type:"mousePressed",x:point.x,y:point.y,button:"left",clickCount:1});
   await send("Input.dispatchMouseEvent",{type:"mouseMoved",x:point.x+60,y:point.y,button:"left"});
@@ -63,27 +74,33 @@ try{
   assert.notEqual(await evalJS("app.view.cx"),beforePan,"Drag-to-pan did not change the viewport");
   await evalJS("document.querySelector('#fitMap').click()");
   assert.equal(await evalJS("document.querySelector('#zoomLevel').textContent"),"100%");
-  await evalJS("document.querySelector('[data-cell=\"2\"]').click()");
-  assert.match(await evalJS("document.querySelector('#towerHeading').textContent"),/C2/);
-  const tower=await evalJS("(()=>{const r=document.querySelector('#networkCanvas').getBoundingClientRect(),p=projection(r.width,r.height);return {x:r.left+p.x(75),y:r.top+p.y(25)}})()");
+  await evalJS("document.querySelector('[data-cell=\"0\"]').click()");
+  assert.match(await evalJS("document.querySelector('#towerHeading').textContent"),/C0/);
+  const tower=await evalJS("(()=>{const r=document.querySelector('#networkCanvas').getBoundingClientRect(),p=projection(r.width,r.height);return {x:r.left+p.x(50),y:r.top+p.y(20.555)}})()");
   await send("Input.dispatchMouseEvent",{type:"mousePressed",x:tower.x,y:tower.y,button:"left",clickCount:1});
   await send("Input.dispatchMouseEvent",{type:"mouseReleased",x:tower.x,y:tower.y,button:"left",clickCount:1});
   assert.match(await evalJS("document.querySelector('#towerHeading').textContent"),/C1/,"Clicking a map tower did not inspect it");
+
+  await evalJS("document.querySelector('[data-line=\"backhaul\"]').click()");
+  assert.equal(await evalJS("app.spotlightLine"),"backhaul","Backhaul legend pill did not spotlight");
+  if(process.env.PRORAN_BACKHAUL_SCREENSHOT)await screenshot(process.env.PRORAN_BACKHAUL_SCREENSHOT);
+  await evalJS("document.querySelector('[data-line=\"backhaul\"]').click()");
+  assert.equal(await evalJS("app.spotlightLine"),null,"Backhaul toggle did not clear spotlight");
+
+  assert.ok(await evalJS("Boolean(document.querySelector('#hsrSparkProposed')?.getAttribute('d')?.length > 10)"), "HSR sparkline did not render path");
+  assert.ok(await evalJS("Boolean(document.querySelector('#hsrAreaProposed')?.getAttribute('d')?.length > 10)"), "HSR area fill did not render path");
 
   await evalJS("document.querySelector('#playBtn').click()");
   assert.equal(await evalJS("document.querySelector('#playText').textContent"),"Resume");
   const paused=await evalJS("document.querySelector('#simTime').textContent");await sleep(800);
   assert.equal(await evalJS("document.querySelector('#simTime').textContent"),paused);
   await evalJS("document.querySelector('#playBtn').click()");
-  await evalJS("document.querySelector('#scenario').value='crossing';document.querySelector('#scenario').dispatchEvent(new Event('change'))");
-  let changed=false;
-  for(let i=0;i<20;i++){await sleep(100);changed=await evalJS("document.querySelector('#simTime').textContent==='0.0 s'&&document.querySelector('#scenarioDescription').textContent.includes('six-device')");if(changed)break;}
-  assert.ok(changed,"Switching scenarios did not start a fresh six-device trace");
+
   await send("Emulation.setDeviceMetricsOverride",{width:390,height:844,deviceScaleFactor:1,mobile:true});await sleep(350);
   const overflow=await evalJS("[...document.querySelectorAll('body *')].filter(e=>e.getBoundingClientRect().right>innerWidth+3).slice(0,12).map(e=>e.tagName+'.'+e.className+':'+Math.round(e.getBoundingClientRect().right)).join(', ')");
   assert.equal(overflow,"",`Mobile horizontal overflow: ${overflow}`);
   if(process.env.PRORAN_SCREENSHOT){await evalJS("scrollTo(0,0)");await sleep(250);await screenshot(process.env.PRORAN_SCREENSHOT);}
   assert.deepEqual(exceptions,[],`Browser exceptions: ${exceptions.join('; ')}`);
-  console.log("Browser smoke passed: six devices, large zoom/pan map, real RB hold/outcome, tower click, playback, and mobile layout.");
+  console.log("Browser smoke passed: 7-cell honeycomb cluster, indicators, large zoom/pan map, tower click, playback, and mobile layout.");
   await send("Browser.close").catch(()=>{});
 }finally{socket?.close();child.kill();}

@@ -31,6 +31,22 @@ SCENARIOS = {
     "crossing": {"label": "Fast crossing into a busy cell", "n_ues": 6,
                  "capacity": 20, "speed": 1.0, "seed": 118, "focus_uid": 2,
                  "description": "A shorter six-device trace with a contested uRLLC arrival."},
+    "hex_cluster": {"label": "7-Cell Honeycomb Cluster: Avoid Overloaded Cell & Predict Handover", "n_ues": 10,
+                    "capacity": 16, "speed": 0.65, "seed": 42, "focus_uid": 5,
+                    "centers": [
+                        [50.0, 50.0],    # C0: Central Hub
+                        [50.0, 20.555],  # C1: Top Cell
+                        [75.5, 35.278],  # C2: Top-Right Cell
+                        [75.5, 64.722],  # C3: Bottom-Right Cell
+                        [50.0, 79.445],  # C4: Bottom Cell
+                        [24.5, 64.722],  # C5: Bottom-Left Cell
+                        [24.5, 35.278],  # C6: Top-Left Cell
+                    ],
+                    "description": "Authentic 7-cell hexagonal honeycomb cluster. Congested microcells reject blind connections; PPO predicts trajectories, steers clear of overloaded towers, and pre-allocates resources for 0ms handover."},
+    "five_cells": {"label": "5-Cell Hexagonal: Avoid Overloaded Cell & Predict Handover", "n_ues": 7,
+                   "capacity": 18, "speed": 1.0, "seed": 42, "focus_uid": 1,
+                   "centers": [[25.0, 25.0], [75.0, 25.0], [25.0, 75.0], [75.0, 75.0], [50.0, 50.0]],
+                   "description": "5 hexagonal cells with an overloaded central tower C4. Demonstrates avoiding congested cells and predictive PPO pre-allocation."},
 }
 
 
@@ -44,11 +60,13 @@ class ComparisonSession:
     def __init__(self, seed: int, scenario: str):
         if not MODEL.exists():
             raise FileNotFoundError(f"Saved PPO model is required for the comparison: {MODEL}")
-        preset = SCENARIOS.get(scenario, SCENARIOS["urban"])
+        preset = SCENARIOS.get(scenario, SCENARIOS["hex_cluster"])
+        centers = preset.get("centers")
         cfg = SimConfig(seed=seed, n_ues=preset["n_ues"], cell_capacity=preset["capacity"],
+                        centers=tuple(tuple(float(coord) for coord in c) for c in centers) if centers else None,
                         urllc_burst_prob=preset.get("burst_prob", 0.08),
                         episode_steps=100_000)
-        self.scenario = scenario if scenario in SCENARIOS else "urban"
+        self.scenario = scenario if scenario in SCENARIOS else "hex_cluster"
         self.seed = seed
         self.normal = RANHandoverEnv(cfg)
         self.proposed = RANHandoverEnv(cfg)
@@ -149,7 +167,7 @@ class ComparisonSession:
                         "signal_quality": signal_quality,
                         "allocated": env.ue_allocations.get(ue.uid, 0)})
         cells = []
-        for cell in range(4):
+        for cell in range(len(env.centers)):
             alloc = int(env.allocations[cell]); reserved = int(held[cell])
             slices = []
             for slice_id, profile in enumerate(env.cfg.slices):

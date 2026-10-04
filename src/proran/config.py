@@ -30,6 +30,7 @@ class SimConfig:
     reward_qos: float = 3.0
     reward_waste: float = 1.5
     reward_occupancy: float = 0.25
+    centers: tuple[tuple[float, float], ...] | None = None
     slices: tuple[SliceProfile, ...] = field(default_factory=lambda: (
         SliceProfile("eMBB", 10.5, 3.0, 7, 20.0, 2, "#2878B5"),
         SliceProfile("uRLLC", 7.0, 2.0, 5, 5.0, 3, "#D9534F"),
@@ -38,7 +39,8 @@ class SimConfig:
 
     @property
     def total_capacity(self) -> int:
-        return 4 * self.cell_capacity
+        n_cells = len(self.centers) if self.centers is not None else 4
+        return n_cells * self.cell_capacity
 
     def as_dict(self) -> dict:
         return asdict(self)
