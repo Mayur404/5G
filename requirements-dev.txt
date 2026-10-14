@@ -1,1 +1,5 @@
 -r requirements.txt
+pytest==8.4.0
+ruff==0.14.0
+setuptools==80.9.0
+wheel==0.45.1

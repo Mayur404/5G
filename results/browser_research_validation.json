@@ -1,0 +1,16 @@
+{
+  "status": "passed",
+  "checks": [
+    "large map",
+    "continuous UE transition",
+    "overview trail hidden",
+    "per-slice network PRBs",
+    "per-slice tower PRBs",
+    "signal thresholds",
+    "deep_qos live ledgers, paired movement and signal",
+    "deep_nearest live ledgers, paired movement and signal",
+    "linear_ppo live ledgers, paired movement and signal",
+    "six responsive viewport sizes"
+  ],
+  "exceptions": []
+}

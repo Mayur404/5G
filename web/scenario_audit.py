@@ -2,17 +2,18 @@
 
 Run: python -m web.scenario_audit
 """
+
 from __future__ import annotations
 
-from pathlib import Path
 import csv
+
 import numpy as np
 
 from proran.config import SimConfig
 from proran.policies import SavedPPOPolicy, no_reservation
 from proran.simulator import RANHandoverEnv
-from .server import MODEL, ROOT
 
+from .server import MODEL, ROOT
 
 # Frozen exploratory 32+-UE workloads. These are intentionally independent of
 # the six-device educational web traces and the 20-seed primary benchmark.
@@ -25,8 +26,13 @@ AUDIT_SCENARIOS = {
 
 
 def evaluate(seed, preset, policy):
-    cfg = SimConfig(seed=seed, n_ues=preset["n_ues"], cell_capacity=preset["capacity"],
-                    urllc_burst_prob=preset.get("burst_prob", 0.08), episode_steps=240)
+    cfg = SimConfig(
+        seed=seed,
+        n_ues=preset["n_ues"],
+        cell_capacity=preset["capacity"],
+        urllc_burst_prob=preset.get("burst_prob", 0.08),
+        episode_steps=240,
+    )
     env = RANHandoverEnv(cfg)
     observation = env.reset(seed)
     if preset["speed"] != 1.0:
@@ -47,13 +53,18 @@ def main() -> None:
         for seed in seeds:
             normal, handovers = evaluate(seed, preset, no_reservation)
             proposed, _ = evaluate(seed, preset, learned)
-            rows.append({"scenario": scenario, "seed": seed,
-                         "normal_hsr": normal["handover_success_rate"],
-                         "ppo_hsr": proposed["handover_success_rate"],
-                         "normal_qos": normal["qos_rate"],
-                         "ppo_qos": proposed["qos_rate"],
-                         "ppo_occupancy": proposed["reservation_occupancy"],
-                         "handovers": handovers})
+            rows.append(
+                {
+                    "scenario": scenario,
+                    "seed": seed,
+                    "normal_hsr": normal["handover_success_rate"],
+                    "ppo_hsr": proposed["handover_success_rate"],
+                    "normal_qos": normal["qos_rate"],
+                    "ppo_qos": proposed["qos_rate"],
+                    "ppo_occupancy": proposed["reservation_occupancy"],
+                    "handovers": handovers,
+                }
+            )
     output = ROOT / "results" / "scenario_audit.csv"
     with output.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=list(rows[0]))
@@ -68,7 +79,9 @@ def main() -> None:
         print(f"{scenario:8s}: PPO - baseline HSR {hsr:+.2f} pp, QoS {qos:+.2f} pp")
         macros.append(f"\\newcommand{{\\{aliases[scenario]}HSRGain}}{{{hsr:+.2f}}}")
         macros.append(f"\\newcommand{{\\{aliases[scenario]}QoSGain}}{{{qos:+.2f}}}")
-    (ROOT / "results" / "scenario_macros.tex").write_text("\n".join(macros) + "\n", encoding="utf-8")
+    (ROOT / "results" / "scenario_macros.tex").write_text(
+        "\n".join(macros) + "\n", encoding="utf-8"
+    )
     print(output)
 
 

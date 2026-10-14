@@ -1,0 +1,8 @@
+| Method | Handover success | Handover QoS | Full service | Served demand | Held capacity |
+|---|---:|---:|---:|---:|---:|
+| Nearest / no reservation | 43.07% | 37.24% | 75.00% | 80.55% | 0.00% |
+| Nearest / kinematic reservation | 49.98% | 42.88% | 74.51% | 80.34% | 1.86% |
+| Nearest / neural reservation | 50.78% | 43.01% | 74.49% | 80.34% | 1.95% |
+| QoS-aware / no reservation | 44.23% | 37.90% | 75.99% | 81.35% | 0.00% |
+| QoS-aware / kinematic reservation | 50.87% | 42.91% | 75.19% | 80.97% | 2.59% |
+| QoS-aware / neural reservation | 51.72% | 43.53% | 75.25% | 81.01% | 2.51% |

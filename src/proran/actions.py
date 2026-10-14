@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from numbers import Integral
 
 
 @dataclass(frozen=True)
@@ -22,9 +23,27 @@ ACTION_CATALOG = (
 
 
 def decode_action(action: int, predicted_demand: int, time_to_handover: int) -> tuple[int, int]:
+    if (
+        isinstance(action, bool)
+        or not isinstance(action, Integral)
+        or not 0 <= action < len(ACTION_CATALOG)
+    ):
+        raise ValueError("action must be an integer in the action catalog")
     spec = ACTION_CATALOG[action]
     if action == 0:
         return 0, 0
+    if (
+        isinstance(predicted_demand, bool)
+        or not isinstance(predicted_demand, Integral)
+        or predicted_demand <= 0
+    ):
+        raise ValueError("positive reservation requires positive integer predicted demand")
+    if (
+        isinstance(time_to_handover, bool)
+        or not isinstance(time_to_handover, Integral)
+        or time_to_handover < 1
+    ):
+        raise ValueError("positive reservation requires a future integer arrival interval")
     amount = max(1, min(predicted_demand, round(spec.amount_fraction * predicted_demand)))
     if spec.timing == "now":
         delay = 0

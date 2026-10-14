@@ -1,8 +1,9 @@
-from web.server import ComparisonSession, create_app
+import pytest
+
 from proran.config import SimConfig
 from proran.policies import SavedPPOPolicy, no_reservation
 from proran.simulator import RANHandoverEnv
-from web.server import MODEL
+from web.server import MODEL, ComparisonSession, create_app
 
 
 def test_health_and_static_index():
@@ -10,13 +11,14 @@ def test_health_and_static_index():
     assert client.get("/health").get_json()["status"] == "ok"
     page = client.get("/")
     assert page.status_code == 200
-    assert b"Six-device handover lab" in page.data
-    assert b"One shared world" in page.data
+    assert b"Predictive handover lab" in page.data
+    assert b"Network overview" in page.data
     assert b"Pause" in page.data
     assert b"zoomIn" in page.data
     assert b"zoomOut" in page.data
-    assert b"stepBtn" not in page.data
-    assert b"resetBtn" not in page.data
+    assert b"deviceSelect" in page.data
+    assert page.headers["Cache-Control"] == "no-store"
+    assert "must-revalidate" in client.get("/static/lab.js").headers["Cache-Control"]
     assert client.get("/paper.tex").status_code == 200
     assert client.get("/references.bib").status_code == 200
     meta = client.get("/api/meta").get_json()
@@ -49,9 +51,11 @@ def test_comparison_api_uses_paired_mobility_and_safe_capacity():
                 assert sum(row["allocated"] for row in cell["slices"]) == cell["allocated"]
                 assert sum(row["reserved"] for row in cell["slices"]) == cell["reserved"]
                 assert sum(row["ues"] for row in cell["slices"]) == sum(
-                    ue["cell"] == cell["id"] for ue in network["ues"])
+                    ue["cell"] == cell["id"] for ue in network["ues"]
+                )
                 assert sum(row["demand"] for row in cell["slices"]) == sum(
-                    ue["demand"] for ue in network["ues"] if ue["cell"] == cell["id"])
+                    ue["demand"] for ue in network["ues"] if ue["cell"] == cell["id"]
+                )
             assert {ue["entity_type"] for ue in network["ues"]} == {"car", "drone", "robot"}
             assert all(0 <= ue["signal_quality"] <= 1 for ue in network["ues"])
             assert network["metrics"]["successes"] <= network["metrics"]["handovers"]
@@ -71,8 +75,10 @@ def test_unknown_session_is_reported():
 def test_teaching_scenarios_are_six_device_capacity_cases():
     assert ComparisonSession(21, "urban").normal.cfg.cell_capacity == 18
     assert ComparisonSession(118, "crossing").normal.cfg.cell_capacity == 20
-    assert all(ComparisonSession(seed, scenario).normal.cfg.n_ues == 6
-               for scenario, seed in (("urban", 21), ("crossing", 118)))
+    assert all(
+        ComparisonSession(seed, scenario).normal.cfg.n_ues == 6
+        for scenario, seed in (("urban", 21), ("crossing", 118))
+    )
 
 
 def test_urban_web_trace_matches_offline_policies():
@@ -95,13 +101,17 @@ def test_curated_trace_shows_real_proactive_handover_gain():
     reservations = []
     for step in range(1, 8):
         snap = session.step()
-        reservations.extend(event for event in snap["proposed"]["events"] if event.startswith("reserve "))
+        reservations.extend(
+            event for event in snap["proposed"]["events"] if event.startswith("reserve ")
+        )
         if step == 4:
             target = snap["proposed"]["cells"][0]
             assert target["reserved"] == 8
             assert target["allocated"] + target["reserved"] == target["capacity"]
-            assert any(c["ue"] == 1 and c["target"] == 0 and c["active"]
-                       for c in snap["proposed"]["contracts"])
+            assert any(
+                c["ue"] == 1 and c["target"] == 0 and c["active"]
+                for c in snap["proposed"]["contracts"]
+            )
     assert any("UE1" in event and "C0" in event for event in reservations)
     assert any("HO UE1 C2->C0 SUCCESS (7/7RB)" in event for event in snap["proposed"]["events"])
     assert any("HO UE1 C2->C0 FAIL (3/7RB)" in event for event in snap["normal"]["events"])
@@ -116,8 +126,14 @@ def test_six_device_paired_trace_and_capacity_invariants_across_seeds():
             snap = session.step()
             for left, right in zip(snap["normal"]["ues"], snap["proposed"]["ues"], strict=True):
                 assert (left["x"], left["y"], left["cell"], left["demand"]) == (
-                    right["x"], right["y"], right["cell"], right["demand"])
-            assert snap["normal"]["metrics"]["handovers"] == snap["proposed"]["metrics"]["handovers"]
+                    right["x"],
+                    right["y"],
+                    right["cell"],
+                    right["demand"],
+                )
+            assert (
+                snap["normal"]["metrics"]["handovers"] == snap["proposed"]["metrics"]["handovers"]
+            )
             for network in (snap["normal"], snap["proposed"]):
                 assert len(network["ues"]) == 6
                 for cell in network["cells"]:
@@ -129,10 +145,8 @@ def test_second_six_device_trace_has_measured_early_gain():
     session = ComparisonSession(118, "crossing")
     session.step(2)
     result = session.step()
-    assert any("HO UE2 C2->C0 FAIL (4/6RB)" in event
-               for event in result["normal"]["events"])
-    assert any("HO UE2 C2->C0 SUCCESS (6/6RB)" in event
-               for event in result["proposed"]["events"])
+    assert any("HO UE2 C2->C0 FAIL (4/6RB)" in event for event in result["normal"]["events"])
+    assert any("HO UE2 C2->C0 SUCCESS (6/6RB)" in event for event in result["proposed"]["events"])
     assert result["normal"]["metrics"]["successes"] == 0
     assert result["proposed"]["metrics"]["successes"] == 1
 
@@ -154,3 +168,61 @@ def test_bad_inputs_return_client_errors_and_security_headers():
     page = client.get("/")
     assert page.headers["X-Frame-Options"] == "DENY"
     assert "default-src 'self'" in page.headers["Content-Security-Policy"]
+
+
+def test_history_preserves_undefined_rates_and_time_units():
+    session = ComparisonSession(21, "urban")
+    snap = session.step()
+    assert snap["dt_s"] == 0.1
+    assert snap["history"]["proposed"][0]["time"] == 0.1
+    assert snap["history"]["proposed"][0]["hsr"] is None
+    assert snap["history"]["normal"][0]["qos"] is None
+    decision = snap["proposed"]["decision"]
+    assert decision["eta_s"] == decision["eta_steps"] * snap["dt_s"]
+    assert decision["delay_s"] == decision["delay_steps"] * snap["dt_s"]
+
+
+def test_live_waste_excludes_still_active_holds():
+    session = ComparisonSession(21, "urban")
+    snap = session.step(4)
+    assert snap["proposed"]["cells"][0]["reserved"] == 8
+    assert snap["proposed"]["metrics"]["settled_unused_reservation_fraction"] is None
+    snap = session.step(3)
+    assert snap["proposed"]["metrics"]["settled_unused_reservation_fraction"] == 1 / 8
+
+
+def test_handover_records_separate_admission_allocation_and_qos():
+    snap = ComparisonSession(21, "urban").step(7)
+    base = next(e for e in snap["normal"]["handover_details"] if e["ue"] == 1)
+    ppo = next(e for e in snap["proposed"]["handover_details"] if e["ue"] == 1)
+    assert base["available_rbs"] == 3 and base["allocated_rbs"] == 0
+    assert not base["success"] and not base["qos"]
+    assert ppo["allocated_rbs"] == ppo["demand_rbs"] == 7
+    assert ppo["success"] and ppo["qos"]
+    assert ppo["latency_ms"] <= ppo["latency_limit_ms"]
+    settled = next(
+        e for e in snap["proposed"]["contract_events"] if e["kind"] == "settled" and e["ue"] == 1
+    )
+    assert settled["used_rbs"] == 7 and settled["amount_rbs"] == 8
+
+
+def test_handover_history_survives_batch_steps_and_carries_original_time():
+    snap = ComparisonSession(21, "urban").step(12)
+    event = next(e for e in snap["proposed"]["recent_handovers"] if e["ue"] == 1)
+    assert event["source"] == 2 and event["target"] == 0
+    assert event["step"] == 7 and event["time"] == pytest.approx(0.7)
+    assert event["success"] and event["allocated_rbs"] == 7
+    assert "x" in event and "y" in event
+
+
+def test_api_rejects_non_objects_and_fractional_seeds():
+    client = create_app().test_client()
+    for body in (["urban"], "urban", 42):
+        for route in ("/api/session", "/api/step"):
+            response = client.post(route, json=body)
+            assert response.status_code == 400
+            assert "JSON object" in response.get_json()["error"]
+    for value in (True, 1.5):
+        assert client.post("/api/session", json={"seed": value}).status_code == 400
+    default = client.post("/api/session", json={"scenario": "urban"}).get_json()
+    assert default["snapshot"]["seed"] == 21

@@ -1,0 +1,224 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[margin=23mm]{geometry}
+\usepackage{amsmath,amssymb,booktabs,tabularx,array}
+\usepackage{xcolor,listings}
+\usepackage[hidelinks]{hyperref}
+\definecolor{codebg}{RGB}{247,248,250}
+\lstset{basicstyle=\ttfamily\fontsize{8.5}{9.5}\selectfont,
+backgroundcolor=\color{codebg},frame=single,rulecolor=\color{black!20},
+breaklines=true,columns=fullflexible,keepspaces=true,
+showstringspaces=false,comment=[l]{\#},commentstyle=\color{black!55}}
+\newcommand{\ind}{\mathbf 1}
+\newcommand{\clip}{\operatorname{clip}}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\setlength{\emergencystretch}{2em}
+\title{PPO for Tower Selection and Handover Reservations\\
+\large High-Level System Design, Pseudocode, and Reward}
+\author{ProRAN Project}
+\date{8 October 2026}
+\begin{document}
+\maketitle
+\setlength{\abovedisplayskip}{5pt}
+\setlength{\belowdisplayskip}{5pt}
+\setlength{\abovedisplayshortskip}{3pt}
+\setlength{\belowdisplayshortskip}{3pt}
+
+\section*{1. What the system does}
+The controller chooses a suitable tower for each device and reserves capacity before a likely handover. It considers signal quality, free resources, load, estimated latency, and the device's service requirements. A strong signal alone does not make a tower the best choice.
+
+\textbf{Inputs:} device position and velocity, current tower, demand, service type, tower capacity and load, active reservations, and estimated latency.
+
+\textbf{Actions:} stay or switch tower; reserve or do nothing; hold half or full predicted demand; activate now, halfway to arrival, or just before arrival.
+
+\section*{2. What model is trained?}
+\textbf{PPO is the reinforcement-learning algorithm that trains the actors and critic.} The system design uses two linear actor heads and one linear critic:
+
+\renewcommand{\arraystretch}{1.15}
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{0.25\linewidth}X@{}}
+\toprule Model & Learned role \\ \midrule
+Connection actor & Choose an eligible tower or stay connected to the current one. \\
+Reservation actor & Choose the future reservation tower, amount, and activation time. \\
+Critic & Estimate future reward from the network state, helping the actors learn. \\
+\bottomrule
+\end{tabularx}
+
+A linear actor computes action scores from features and learned weights:
+\begin{equation}
+\mathbf z=W\mathbf o+\mathbf b,
+\qquad
+\pi(a\mid\mathbf o)=\frac{e^{z_a}}{\sum_{j\in\text{legal actions}}e^{z_j}}.
+\end{equation}
+$\mathbf o$ is the observation, $W,\mathbf b$ are learned parameters, and $\pi$ is the action probability. Illegal actions have probability zero. Each actor has its own weights and action mask. There are no hidden neural-network layers in this design.
+
+The critic predicts a value from global network state $\mathbf S$:
+\begin{equation}
+V(\mathbf S)=\mathbf w_V^T\mathbf S+b_V.
+\end{equation}
+Its weights are trained to predict the reward obtained over time. It does not directly choose a tower.
+
+\textbf{Training:} run simulated episodes, sample actions, observe service and waste, calculate rewards, and update weights using PPO. Optional rule imitation can initialize the actors. \textbf{Normal operation:} load the saved weights and choose the highest-probability legal actions, without updating weights.
+
+\textbf{Prediction is separate:} project movement using current velocity. This is not a trained predictor and can be wrong when movement or traffic changes.
+
+\newpage
+\section*{3. One high-level pseudocode}
+At most one new reservation is requested per interval. Connection decisions are processed by service priority and device ID, using updated capacity after earlier decisions.
+\begin{lstlisting}
+IF training: initialize both actors and critic
+ELSE: load saved actor weights
+FOR each episode or normal run:
+    Reset devices, traffic, allocations, and reservations
+    REPEAT every interval:
+        Store the observable global network state
+        waste = 0; successful_switches = 0
+        # A. Prepare resources for a likely future handover
+        Project movement and demand over the forecast horizon
+        Select an uncontracted device likely to need a handover
+        IF a candidate exists:
+            Observe ALL candidate towers, not just the closest
+            Mask invalid holds; keep NO RESERVATION legal
+            Reservation actor chooses tower, amount, and timing
+            Create a pending contract if a hold is chosen
+        FOR each pending contract due now:
+            IF its whole amount fits current free capacity:
+                Activate it and hold the resources
+            ELSE: reject it; consume no capacity
+        # B. Serve existing devices, then move them
+        Allocate ordinary service using capacity minus active holds
+        Record held capacity for the interval's holding penalty
+        Move devices with mobility noise and boundary reflection
+        # C. Choose actual connections after observing movement
+        FOR each device in priority / ID order:
+            Refresh tower load, free capacity, signal, and latency
+            Mask destinations with poor coverage or too few RBs
+            Keep STAY legal; discourage rapid repeated switching
+            Connection actor chooses current tower or destination
+            IF destination differs from current tower:
+                Recheck coverage, capacity, and radio outcome
+                available = matching ACTIVE hold + free capacity
+                possible_grant = min(actual demand, available)
+                admitted = covered AND minimum RBs met AND radio_ok
+                IF admitted:
+                    Release old allocation; settle device contracts
+                    Grant resources and commit the new association
+                    successful_switches += 1
+                ELSE:
+                    Keep old association and allocation
+                    Settle attempted contracts; reserved RBs used = 0
+                Count unused active reservation RBs as waste
+                Check full demand AND latency for handover QoS
+        # D. Measure service and reward
+        Expire remaining due contracts AFTER connection attempts
+        Add their unused active RBs to waste
+        For every device, effective grant = actual grant if covered
+                                            else zero
+        Compute service F, QoS Q, unmet demand U, and under-service O
+        Compute switching H, waste W, and held-capacity R penalties
+        reward = wf*F + wq*Q - wu*U - wo*O - wh*H - ww*W - wr*R
+        IF training: store actions, masks, log probabilities, reward
+        Assert allocated + active held <= tower capacity
+        Advance time and update traffic
+    Settle terminal unused holds; include their waste consistently
+    IF training:
+        Calculate advantages and return targets
+        Update both actors with clipped PPO; fit critic to returns
+    ELSE: report service, QoS, switching, waste, and utilization
+# Save trained weights after training
+\end{lstlisting}
+
+\newpage
+\section*{4. Main system formulas, line by line}
+Symbols: $C_c$ = tower capacity, $A_c$ = allocated RBs, $R_c$ = active held RBs, $D_u$ = device demand, $M_{u,c}$ = its matching active hold, and $m_u$ = its minimum RB requirement. RB means resource block, the simulator's integer capacity unit.
+
+\textbf{1. Free capacity and safety:}
+\begin{equation}
+F_c=\max(0,C_c-A_c-R_c),\qquad A_c+R_c\le C_c.
+\end{equation}
+Active holds reduce free capacity. Pending contracts do not consume RBs.
+
+\textbf{2. Movement prediction:}
+\begin{equation}
+\widehat{\mathbf x}_u(k)=\mathbf x_u+k\mathbf v_u.
+\end{equation}
+$\mathbf x_u$ is current position, $\mathbf v_u$ is displacement per interval, and $k$ is the number of forecast intervals. This estimate does not know future random movement.
+
+\textbf{3. Capacity for a new connection:}
+\begin{equation}
+S_{u,c}=\min(D_u,M_{u,c}+F_c).
+\end{equation}
+Only a matching active hold can supplement destination free capacity. When evaluating staying, also include the device's own existing allocation at its current tower.
+
+\textbf{4. Admission and QoS:}
+\begin{align}
+Y_u&=\ind[\text{coverage acceptable}]\ind[S_{u,c}\ge m_u]\ind[\text{radio passes}],\\
+Q_u^{\rm HO}&=Y_u\ind[S_{u,c}\ge D_u]\ind[L_{u,c}\le L_u^{\max}].
+\end{align}
+$\ind[\cdot]$ equals 1 if true, otherwise 0. Admission needs minimum service; handover QoS also needs full demand and acceptable latency. Failed admission does not commit the new association in this design.
+
+\textbf{5. Modeled latency:}
+\begin{align}
+\rho_c&=(A_c+R_c)/C_c,\qquad s_{u,c}=\max(0,1-S_{u,c}/D_u),\\
+L_{u,c}&=L_{\rm base}(1+0.75\rho_c^2+3s_{u,c}).
+\end{align}
+Load and unmet demand increase estimated latency. This is a synthetic model, not measured packet delay. Base values are 8 ms for eMBB, 2 ms for uRLLC, and 22 ms for mMTC.
+
+\section*{5. Edge cases}
+\begin{itemize}
+\item \textbf{Strong signal but overloaded:} choose another adequately covered tower, or stay if service is already good.
+\item \textbf{Wrong reservation tower:} its hold cannot help elsewhere; release unused active RBs on a handover attempt or expiry and count waste.
+\item \textbf{Early arrival:} pending holds cannot help; use free capacity. \textbf{Late or missing arrival:} use only active unexpired holds, otherwise expire them.
+\item \textbf{Capacity or radio failure:} keep the old association. If its link has lost coverage, record zero effective service.
+\item \textbf{Demand mismatch:} supplement a small hold from free capacity; excess active reserved RBs are waste. Admission can pass while full-demand QoS fails.
+\item \textbf{Concurrent arrivals or no alternative:} refresh ledgers after every decision; keep stay legal, but never claim service without capacity and coverage.
+\end{itemize}
+
+\newpage
+\section*{6. Main reward function}
+Measure service to \textbf{all devices}, including those harmed by reservation holds. Let $N$ be device count, $G_u$ its effective grant (zero when uncovered), and $L_u$ the latency estimated from its actual final grant and association.
+\begin{align}
+F_t&=\frac1N\sum_u\ind[G_u\ge D_u], & &\text{fraction receiving full demand},\\
+Q_t&=\frac1N\sum_u\ind[G_u\ge D_u]\ind[L_u\le L_u^{\max}],
+& &\text{fraction meeting full-demand QoS},\\
+U_t&=\frac{\sum_u\max(0,D_u-G_u)}{\sum_uD_u},
+& &\text{fraction of offered demand unmet},\\
+O_t&=\frac1N\sum_u\ind[G_u<m_u], & &\text{fraction below minimum service},\\
+H_t&=\frac{\text{successful switches in interval}}{N}, & &\text{switching penalty},\\
+W_t&=\frac{\text{unused active RBs settled in interval}}{C_{\rm total}},
+& &\text{reservation waste penalty},\\
+R_t&=\frac{\text{active held RBs before movement}}{C_{\rm total}},
+& &\text{holding penalty}.
+\end{align}
+$C_{\rm total}$ is total capacity across towers. $O_t$ includes both outage and partial under-service. Waste is charged when settled; holding is charged every active interval. Terminal unused holds are included in final reward during training.
+
+\begin{equation}
+\boxed{r_t=w_fF_t+w_qQ_t-w_uU_t-w_oO_t-w_hH_t-w_wW_t-w_rR_t.}
+\end{equation}
+All weights are nonnegative, configurable design parameters. Service and QoS earn reward; unmet demand, under-service, switching, waste, and held resources reduce it. The weights specify the trade-off and are selected before held-out testing. They are not claimed as tuned implementation values.
+
+\section*{7. Learning objective: what PPO optimizes}
+\textbf{Overall goal:} learn actor parameters $\theta$ that maximize expected discounted reward:
+\begin{equation}
+\max_\theta J(\theta),\qquad
+J(\theta)=\mathbb E_{\pi_\theta}\left[\sum_{t=0}^{T-1}\gamma^t r_t\right].
+\end{equation}
+$T$ is episode length and $\gamma$ discounts future rewards. This rewards sustained good connections rather than unnecessary handovers.
+
+\textbf{Advantage:} compare a return target with the critic's prediction:
+\begin{equation}
+\widehat A_t=\widehat G_t-V_{\rm old}(\mathbf S_t).
+\end{equation}
+$\widehat G_t$ estimates reward from this interval onward. Positive advantage means better than expected. The training loop computes targets using GAE and normalizes advantages to $A_t$ for the actor update.
+\textbf{PPO update:} compare the new and old probabilities of the recorded interval's staged decisions:
+\begin{equation}
+\omega_t=\prod_{i\in\mathcal D_t}
+\frac{\pi_{\theta}(a_{t,i}\mid o_{t,i},m_{t,i})}
+{\pi_{\rm old}(a_{t,i}\mid o_{t,i},m_{t,i})}.
+\end{equation}
+$\mathcal D_t$ includes reservation and connection decisions, each evaluated by its own actor head using stored observations and masks. Compute the product in log space for stability.
+\begin{equation}
+\max_\theta L_{\rm PPO}=\mathbb E_t\left[
+\min\{\omega_t A_t,\clip(\omega_t,1-\epsilon,1+\epsilon)A_t\}\right].
+\end{equation}
+Clipping limits excessive probability changes; an optional entropy bonus encourages exploration. The critic fits return targets by minimizing $L_V=\mathbb E_t[(\widehat G_t-V_\psi(\mathbf S_t))^2]$. Adam updates the weights. PPO seeks high expected reward, with no guarantee of the best tower on every decision.
+\end{document}

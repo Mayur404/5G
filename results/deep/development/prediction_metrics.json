@@ -1,0 +1,51 @@
+{
+  "test_seeds": [
+    9000,
+    9001,
+    9002,
+    9003,
+    9004,
+    9005,
+    9006,
+    9007,
+    9008,
+    9009,
+    9010,
+    9011,
+    9012,
+    9013,
+    9014,
+    9015,
+    9016,
+    9017,
+    9018,
+    9019
+  ],
+  "examples": 197120,
+  "horizon_changed_examples": 43224,
+  "future_demand_leads": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8
+  ],
+  "metrics": {
+    "Neural": {
+      "position_rmse_world_units": 2.633462909932699,
+      "horizon_position_rmse_world_units": 4.167345465196274,
+      "future_demand_mae_rbs": 1.8693464393437311,
+      "horizon_cell_accuracy": 0.9734577922077922,
+      "changed_cell_accuracy": 0.9288821025356283
+    },
+    "Constant velocity / demand persistence": {
+      "position_rmse_world_units": 2.77177888066852,
+      "horizon_position_rmse_world_units": 5.015996505778218,
+      "future_demand_mae_rbs": 2.6223156307977735,
+      "horizon_cell_accuracy": 0.9772169237012988,
+      "changed_cell_accuracy": 0.941028132518971
+    }
+  }
+}

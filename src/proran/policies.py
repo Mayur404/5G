@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+
 import numpy as np
 
 
@@ -28,12 +29,16 @@ def uncertainty_aware(state: np.ndarray, mask: np.ndarray, context: dict) -> int
     pred = context.get("prediction")
     if pred is None:
         return 0
-    reliability = pred.probability * (1.0 - pred.target_uncertainty) * (1.0 - min(1.0, 4 * pred.demand_uncertainty))
+    reliability = (
+        pred.probability
+        * (1.0 - pred.target_uncertainty)
+        * (1.0 - min(1.0, 4 * pred.demand_uncertainty))
+    )
     if reliability < 0.46:
         return 0
     if pred.target_uncertainty > 0.18:
         return _legal([3, 5, 1], mask)  # Half amount, delayed activation.
-    return _legal([4, 6, 2], mask)      # Full amount, midpoint activation.
+    return _legal([4, 6, 2], mask)  # Full amount, midpoint activation.
 
 
 def oracle(state: np.ndarray, mask: np.ndarray, context: dict) -> int:
@@ -60,12 +65,20 @@ class SavedPPOPolicy:
     seed: int = 0
 
     def __post_init__(self) -> None:
+        if self.weights.ndim != 2 or self.bias.shape != (self.weights.shape[1],):
+            raise ValueError("PPO weights must be a matrix with one bias per action")
+        if not np.isfinite(self.weights).all() or not np.isfinite(self.bias).all():
+            raise ValueError("PPO parameters must be finite")
         self.rng = np.random.default_rng(self.seed)
 
     @staticmethod
-    def _probabilities(state: np.ndarray, mask: np.ndarray, weights: np.ndarray, bias: np.ndarray) -> np.ndarray:
+    def _probabilities(
+        state: np.ndarray, mask: np.ndarray, weights: np.ndarray, bias: np.ndarray
+    ) -> np.ndarray:
         logits = state @ weights + bias
-        logits = np.where(mask, logits, -1e9)
+        if not np.any(mask):
+            raise ValueError("At least one action must be legal")
+        logits = np.where(mask, logits, -np.inf)
         logits -= np.max(logits)
         exp = np.exp(logits) * mask
         return exp / exp.sum()
@@ -78,5 +91,5 @@ class SavedPPOPolicy:
 
     @classmethod
     def load(cls, path: str, deterministic: bool = True) -> "SavedPPOPolicy":
-        data = np.load(path)
-        return cls(data["actor_w"], data["actor_b"], deterministic=deterministic)
+        with np.load(path) as data:
+            return cls(data["actor_w"].copy(), data["actor_b"].copy(), deterministic=deterministic)

@@ -1,0 +1,20 @@
+* text=auto
+*.py text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.mjs text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.md text eol=lf
+*.toml text eol=lf
+*.txt text eol=lf
+Dockerfile text eol=lf
+.gitignore text eol=lf
+.dockerignore text eol=lf
+*.yml text eol=lf
+*.tex text eol=lf
+*.ps1 text eol=crlf
+*.png binary
+*.pdf binary
+*.gif binary
+*.npz binary

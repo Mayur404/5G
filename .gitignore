@@ -3,12 +3,30 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .pytest_tmp/
+.pytest_tmp*/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
 .tmp_pytest/
 .mplconfig/
 .edge-profile/
 .edge-*/
-paper.aux
-paper.bbl
-paper.blg
-paper.log
-paper.out
+.tools/
+
+# Local experiments and generated TeX build files.
+results_candidate*/
+*.aux
+*.bbl
+*.blg
+*.log
+*.out
+*.toc
+*.synctex.gz
+rl_handover_pseudocode.pdf
+results/demo_*.png
+results/web-ui-*.png
+results/lab_reservation.png
+# Local planning notes and an identical backup of paper.tex.
+WORK_PLAN.md
+paper_legacy.tex

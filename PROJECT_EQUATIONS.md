@@ -1,5 +1,7 @@
 # Mathematical specification: predictive handover reservation in a sliced 5G RAN
 
+> Implementation status: this is the source-based proposed specification. The runnable artifact uses a declared synthetic predictor and priority scheduler rather than every proposed calibrated-error, throughput, and slice-floor interface below. See [SIMULATION_REVIEW.md](SIMULATION_REVIEW.md) for the implemented equations, verified results, and remaining differences.
+
 ## Scope and provenance
 
 This document uses all three supplied files: [text1.txt](text1.txt) (problem statement), [text2.txt](text2.txt) (initial formulation), and [*PreNS: A Hybrid Predictive and Real-Time Resource Allocation Framework for 5G and Beyond RAN Network Slicing*](<PreNS_A_Hybrid_Predictive_and_Real-Time_Resource_Allocation_Framework_for_5G_and_Beyond_RAN_Network_Slicing (1).pdf>) (supplied PDF, abbreviated **P**). The PPO and generalized advantage equations come from the original [PPO paper](https://arxiv.org/pdf/1707.06347) (**O**) and [GAE paper](https://arxiv.org/pdf/1506.02438) (**G**). **N** means an equation explicitly in `text2.txt`; **D** is an algebraic/accounting consequence of cited equations; **S** is an explicit proposed system definition motivated by the two notes. A source equation does not automatically become a recommended implementation equation.

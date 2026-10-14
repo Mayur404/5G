@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 
 from .config import SimConfig, TrainConfig
 from .dashboard import animate, terminal_live
@@ -10,7 +9,9 @@ from .ppo import train_ppo
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Proactive 5G RAN handover reservation research artifact")
+    parser = argparse.ArgumentParser(
+        description="Proactive 5G RAN handover reservation research artifact"
+    )
     sub = parser.add_subparsers(dest="command", required=True)
     train = sub.add_parser("train", help="Train masked PPO")
     train.add_argument("--output", default="results")

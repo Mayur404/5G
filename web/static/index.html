@@ -1,571 +1,300 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0f172a">
-  <title>ProRAN | Six-device handover lab</title>
-  <link rel="stylesheet" href="/static/lab.css">
-  <script src="/static/lab.js" defer></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#112746">
+<title>ProRAN | Predictive handover lab</title>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/workspace.css?v=20261004-6">
+<script src="/static/lab.js?v=20261007-2" defer>
+</script>
 </head>
 <body>
-  <header class="topbar">
-    <div class="topbar-inner">
-      <div class="brand">
-        <span class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect width="28" height="28" rx="8" fill="#0f172a"/>
-            <path d="M7 20V8h5.2c2.4 0 4 1.4 4 3.4 0 2.1-1.6 3.5-4 3.5H9.6V20H7zm2.6-7.3h2.4c1.1 0 1.8-.6 1.8-1.5s-.7-1.5-1.8-1.5H9.6v3z" fill="#f8fafc"/>
-            <circle cx="21" cy="7" r="3.5" fill="#e42b0c"/>
-            <circle cx="21" cy="7" r="5" stroke="#e42b0c" stroke-width="1.2" opacity="0.4" class="brand-pulse"/>
-          </svg>
-        </span>
-        <div class="brand-title">
-          <span class="brand-name">ProRAN</span>
-          <span class="brand-tag">RESEARCH LAB</span>
-        </div>
-      </div>
-      <div class="topbar-center">
-        <span class="telemetry-pill">
-          <span class="live-pulse" aria-hidden="true"></span>
-          <span>SYNTHETIC 5G RAN SLICING · LOCAL SIMULATION</span>
-        </span>
-      </div>
-      <div class="topbar-links">
-        <a href="/paper.tex" class="topbar-link" target="_blank" rel="noopener" title="View IEEE-formatted research paper manuscript">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-          <span>paper.tex</span>
-        </a>
-        <a href="/references.bib" class="topbar-link" target="_blank" rel="noopener" title="View BibTeX citations">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-          <span>references.bib</span>
-        </a>
-      </div>
-    </div>
-  </header>
+<a class="skip-link" href="#simulation">Skip to simulation</a>
+<header class="topbar">
+<div class="topbar-inner">
+<a class="brand" href="/" aria-label="ProRAN home"><svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M4 25V15M12 25V10M20 25V5M28 25V15" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>ProRAN
+<span class="brand-tag">NETWORK LAB</span>
+</a>
+<span class="telemetry-pill"><i></i> SYNTHETIC 5G SIMULATION</span>
+<nav aria-label="Research resources"><a href="#simulation" class="nav-active">Simulation</a><a href="#sessionResults">Session results</a>
+<a href="#guide">How it works</a>
+<a href="/paper.tex" target="_blank" rel="noopener">Manuscript ↗</a>
+</nav>
+</div>
+</header>
+<main>
+<section class="intro" aria-labelledby="pageTitle">
+<div class="intro-title"><p class="eyebrow">PREDICTIVE HANDOVER SIMULATOR</p><h1 id="pageTitle">Your network, in motion.</h1></div>
+<div class="controls">
+<div class="scenario-control"><label class="eyebrow" for="scenario">SCENARIO</label><select id="scenario">
+<option value="hex_cluster" selected>Seven-cell cluster</option><option value="urban">Six-device walkthrough</option><option value="crossing">Fast crossing</option><option value="five_cells">Five-cell overlap</option></select></div>
+<div class="scenario-control controller-control"><label class="eyebrow" for="controller">CONTROLLER</label><select id="controller"><option value="deep_qos" selected>Deep forecast + QoS target</option><option value="deep_nearest">Deep forecast + nearest target</option><option value="linear_ppo">Legacy linear PPO</option></select></div>
+<div class="playback-actions"><button id="playBtn" class="primary" type="button" aria-pressed="false"><span id="playIcon" aria-hidden="true">Ⅱ</span><span id="playText">Pause</span></button><button id="restartBtn" type="button" title="Replay this scenario with the same seed"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10a8 8 0 1 1 1 8M4 4v6h6"/></svg><span>Replay</span></button></div>
+<div class="sim-clock"><small>SIM TIME</small><strong id="simTime">0.0 s</strong></div>
+</div>
+<p id="scenarioDescription" class="scenario-note">Ten devices share seven capacity-limited cells.</p>
+<p class="playback-note" id="playbackNote">Each simulation interval = 0.1 s</p>
+</section>
+<section class="workspace" id="simulation" aria-label="Live simulation">
+<article class="map-panel">
+<div class="map-heading">
+<div class="map-title"><span class="live-indicator"></span><div><p class="eyebrow" id="mapEyebrow">LIVE PPO NETWORK · 7 CELLS / 10 DEVICES</p><h2>Network overview</h2></div></div>
+<div class="map-actions"><button id="showInspector" class="icon-button" type="button" aria-pressed="true" title="Toggle inspector" aria-label="Toggle inspector"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg></button><button id="expandMap" class="icon-button" type="button" aria-pressed="false" title="Expand map" aria-label="Expand map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button></div>
+</div>
+<div class="device-bar">
+<label for="deviceSelect">INSPECT DEVICE</label>
+<select id="deviceSelect" aria-label="Select a device to inspect">
+</select>
+<span id="deviceSummary">Loading devices…</span>
+<span id="signalStatus" class="signal-status" data-level="fair">Loading signal…</span>
+</div>
+<div class="connection-roster" id="connectionRoster" aria-label="Live device to tower assignments"></div>
+<div class="canvas-frame">
+<div class="map-caption"><span class="caption-dot"></span>Live device → tower links <span class="caption-sub" id="activeControllerLabel">Deep forecast</span></div>
+<div class="zoom-controls" aria-label="Map view">
+<button id="zoomIn" type="button" aria-label="Zoom in">+</button><span id="zoomLevel">100%</span><button id="zoomOut" type="button" aria-label="Zoom out">−</button><div class="zoom-divider"></div><button id="fitMap" type="button" title="Show the whole simulated world">Fit</button><button id="trackCar" type="button" aria-pressed="false" title="Follow the selected device">Follow</button>
+</div>
+<div class="map-scale" id="mapScale" aria-hidden="true"></div>
+<canvas id="networkCanvas" tabindex="0" aria-label="Interactive map of devices and cells. Use arrow keys to pan, plus and minus to zoom, F to fit, and Space to pause. Device and tower selectors provide an accessible alternative.">
+</canvas>
+</div>
+<div class="handover-strip"><span id="handoverCounter">0 handovers</span><div id="recentHandoverList" aria-label="Recent handover results" aria-live="polite"></div></div>
+<div class="map-footer">
+<div class="map-legend" aria-label="Map layers">
+<button type="button" class="legend-pill active" data-line="hex" aria-pressed="true"><span class="pill-symbol boundary"></span>Cells</button>
+<button type="button" class="legend-pill active" data-line="labels" aria-pressed="true"><span class="pill-symbol labels"></span>Tower RBs</button>
+<button type="button" class="legend-pill" data-line="backhaul" aria-pressed="false"><span class="pill-symbol backhaul"></span>Site links</button>
+</div>
+<details class="legend-drawer"><summary>Color key &amp; controls <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div class="status-legend" aria-label="Map color key">
+<span><i class="key embb"></i>eMBB PRBs</span><span><i class="key urllc"></i>uRLLC PRBs</span><span><i class="key mmtc"></i>mMTC PRBs</span><span><i class="key allocated"></i>Serving link</span><span><i class="key held"></i>Held / dashed reservation</span><span><i class="key free"></i>Free RBs</span><span><i class="key strong"></i>Strong ≥70%</span><span><i class="key fair"></i>Fair 40–69%</span><span><i class="key weak"></i>Weak &lt;40%</span>
+<small>Tower PRBs = allocated / capacity. Slice colors: <span style="color:#8b5cf6">eMBB</span> · <span style="color:#2563eb">uRLLC</span> · <span style="color:#0d9da5">mMTC</span>; amber = held, light = free. Cards appear at 100% zoom and above.</small><small>Every device keeps its tower link. Blue = allocated service; dotted rose = assigned cell without allocated PRBs. Select a device for its label, signal, reservation and latest handover.</small><small>Signal = distance proxy, not measured radio power. QoS-aware switching also considers capacity and latency, with hysteresis and a two-sample trigger. Handover arrow: green admitted, red blocked.</small><small>Drag to pan · Wheel / pinch to zoom · Double-click to zoom · F to fit · Space to pause</small></div></details>
+</div>
+</article>
+<aside class="guide-rail" aria-label="Network inspector">
+<div class="inspector-heading"><div><p class="eyebrow">LIVE TELEMETRY</p><h2>Inspector</h2></div><span class="inspector-badge">PPO</span></div>
+<div class="inspector-tabs" role="tablist" aria-label="Inspect network"><button id="tabDevice" type="button" role="tab" aria-selected="true" aria-controls="panelDevice" data-panel="Device">Device</button><button id="tabTowers" type="button" role="tab" aria-selected="false" aria-controls="panelTowers" data-panel="Towers" tabindex="-1">Towers</button><button id="tabEvents" type="button" role="tab" aria-selected="false" aria-controls="panelEvents" data-panel="Events" tabindex="-1">Events</button><button id="tabModel" type="button" role="tab" aria-selected="false" aria-controls="panelModel" data-panel="Model" tabindex="-1">Model</button></div>
+<div class="inspector-body"><div id="panelDevice" role="tabpanel" aria-labelledby="tabDevice">
+<section class="step-card">
+<div class="step-top">
+<span id="phaseNumber">01</span>
+<p class="eyebrow" id="phaseLabel">APPROACH</p>
+</div>
+<h2 id="phaseTitle">Follow the selected device.</h2>
+<p id="phaseText">The map shows its allocation and any planned reservation.</p>
+<div class="selected-facts" id="selectedFacts">
+</div>
+</section>
+<section class="rail-card outcome-card">
+<p class="eyebrow">SAME MOVEMENT · DIFFERENT RESERVATIONS</p>
+<h2 id="outcomeHeading">Latest crossing</h2>
+<div class="outcome-grid">
+<div class="outcome baseline">
+<span class="outcome-tag">NO RESERVATION</span>
+<strong id="normalOutcome">No crossing yet</strong>
+<small id="normalOutcomeDetail">—</small>
+</div>
+<div class="outcome proposed">
+<span class="outcome-tag">PPO RESERVATION</span>
+<strong id="proposedOutcome">No crossing yet</strong>
+<small id="proposedOutcomeDetail">—</small>
+</div>
+</div>
+<p class="fineprint" id="outcomeNote">Results refer to the selected device. Admission and QoS are checked separately.</p>
+</section>
+</div><div id="panelModel" role="tabpanel" aria-labelledby="tabModel" hidden><details class="rail-card model-card" open>
+<summary>What did the controller decide?</summary>
+<div class="details-body">
+<h2 id="decisionHeading">Waiting for a forecast</h2>
+<p id="decisionText">PPO chooses reservation amount and timing.</p>
+<div id="decisionFacts" class="decision-facts">
+</div>
+<div id="policyDistribution" class="policy-distribution" aria-label="Legal action probabilities">
+</div>
+</div>
+</details>
+</div><div id="panelTowers" role="tabpanel" aria-labelledby="tabTowers" hidden><details class="rail-card tower-card" open>
+<summary>
+<span id="towerHeading">Tower C0</span> · compare capacity</summary>
+<div class="details-body">
+<div class="tower-nav" id="towerNav" aria-label="Select tower">
+</div>
+<div class="tower-ledgers">
+<div id="normalTower">
+</div>
+<div id="proposedTower">
+</div>
+</div>
+<p class="fineprint">Used capacity is solid; held capacity is hatched; uncommitted capacity is light. Slice rows show allocation / interval demand, with held RBs separately.</p>
+</div>
+</details></div><div id="panelEvents" role="tabpanel" aria-labelledby="tabEvents" hidden><details class="rail-card event-card" open>
+<summary>Event history <span id="eventCount" class="stat-chip">0 events</span>
+</summary>
+<div class="details-body">
+<label for="eventFilter">Show events for</label>
+<select id="eventFilter">
+<option value="selected">Selected device</option>
+<option value="all">All devices</option>
+</select>
+<div id="liveEventStream" class="event-stream">
+<p class="event-row idle">No events yet.</p>
+</div>
+<p class="fineprint">Newest first · last 100 events · simulation time, not wall-clock time.</p>
+</div>
+</details></div></div></aside>
+</section>
+<section id="sessionResults" class="stats-strip" aria-label="Cumulative results for this session">
+<article class="stat-card">
+<div class="stat-head">
+<h2>Handover admission</h2>
+<span id="statHsrDelta" class="stat-delta">—</span>
+</div>
+<div class="stat-compare">
+<div>
+<small>NO RESERVATION</small>
+<strong id="statHsrNormal">—</strong>
+</div>
+<div>
+<small>PPO RESERVATION</small>
+<strong id="statHsrProposed">—</strong>
+</div>
+</div>
+<p class="stat-desc">
+<span id="normalScore">0 / 0 admitted</span> · <span id="proposedScore">0 / 0 admitted</span>
+</p>
+<div class="sparkline-wrap" id="hsrSparkWrap">
+<svg id="hsrSparkline" class="sparkline-svg" role="img" viewBox="0 0 200 44" preserveAspectRatio="none" aria-label="Cumulative admission rate over recent intervals. Solid PPO; dashed no reservation. Rates remain undefined before the first attempt.">
+<path id="hsrSparkNormal" class="spark-line normal"/>
+<path id="hsrSparkProposed" class="spark-line proposed"/>
+<line id="hsrScrubLine" class="spark-scrub-line" y1="0" y2="44" hidden/>
+</svg>
+<span class="spark-scrub-tooltip" id="hsrScrubTooltip">Cumulative rate · recent 90 intervals</span>
+</div>
+</article>
+<article class="stat-card">
+<div class="stat-head">
+<h2>Handover QoS</h2>
+<span id="statQosDelta" class="stat-delta">—</span>
+</div>
+<div class="stat-compare">
+<div>
+<small>NO RESERVATION</small>
+<strong id="statQosNormal">—</strong>
+</div>
+<div>
+<small>PPO RESERVATION</small>
+<strong id="statQosProposed">—</strong>
+</div>
+</div>
+<p class="stat-desc">Admitted, full RB demand met, and modeled latency within limit.</p>
+<div class="sparkline-wrap" id="qosSparkWrap">
+<svg id="qosSparkline" class="sparkline-svg" role="img" viewBox="0 0 200 44" preserveAspectRatio="none" aria-label="Cumulative handover QoS rate over recent intervals. Solid PPO; dashed no reservation.">
+<path id="qosSparkNormal" class="spark-line normal"/>
+<path id="qosSparkProposed" class="spark-line proposed"/>
+<line id="qosScrubLine" class="spark-scrub-line" y1="0" y2="44" hidden/>
+</svg>
+<span class="spark-scrub-tooltip" id="qosScrubTooltip">Solid PPO · dashed no reservation</span>
+</div>
+</article>
+<article class="stat-card">
+<div class="stat-head">
+<h2>Allocated PRBs by slice</h2>
+<span class="stat-chip" id="statCapacityChip">112 RB</span>
+</div>
+<div class="stat-metric-row">
+<div>
+<strong id="statTotalAlloc">0</strong>
+<small>ALLOCATED</small>
+</div>
+<div>
+<strong id="statTotalReserved">0</strong>
+<small>HELD</small>
+</div>
+<div>
+<strong id="statTotalFree">112</strong>
+<small>FREE</small>
+</div>
+</div>
+<div id="networkCapacityBar" class="capacity-bar" role="img" aria-label="Network capacity">
+</div>
+<p class="stat-desc" id="statCapacityDesc">Allocated + held + free = capacity.</p>
+<p class="fineprint" id="reservationCost">Reservation occupancy: —</p>
+</article>
+</section>
 
-  <main>
-    <section class="intro">
-      <div class="intro-content">
-        <div class="eyebrow-badge">
-          <span class="badge-dot" aria-hidden="true"></span>
-          <p class="eyebrow">THE 7-CELL HONEYCOMB HANDOVER LAB</p>
-        </div>
-        <h1>7-Cell Honeycomb Grid. <em>Predictive PPO Handover.</em></h1>
-        <p class="lede">Watch devices traverse the 7-cell hexagonal cellular network. Overloaded towers are avoided, trajectories are predicted in advance, and PPO pre-allocates resources to guarantee zero-drop handovers.</p>
-      </div>
-
-      <div class="controls">
-        <div class="control-header">
-          <label for="scenario">ACTIVE SCENARIO</label>
-        </div>
-        <div class="select-wrapper">
-          <select id="scenario">
-            <option value="hex_cluster" selected>7-Cell Honeycomb Cluster: Avoid Overloaded Cell &amp; Predict Handover</option>
-          </select>
-          <svg class="select-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
-        </div>
-        <p id="scenarioDescription"></p>
-        <div class="control-row">
-          <button id="playBtn" type="button" aria-pressed="false">
-            <span id="playIcon">Ⅱ</span>
-            <span id="playText">Pause</span>
-          </button>
-          <div class="sim-clock">
-            <small>SIMULATED TIME</small>
-            <strong id="simTime">0.0 s</strong>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="workspace">
-      <article class="map-panel">
-        <div class="map-heading">
-          <div>
-            <div class="eyebrow-badge">
-              <span class="badge-dot pulse" aria-hidden="true"></span>
-              <p class="eyebrow">LIVE PPO NETWORK / 7-CELL HONEYCOMB CLUSTER</p>
-            </div>
-            <h2>One shared world, one clear handover</h2>
-            <p>The map shows PPO service and reservations. Compare its outcome with the no-reservation network on the right.</p>
-          </div>
-          <div class="zoom-controls" aria-label="Map zoom">
-            <button id="zoomOut" type="button" aria-label="Zoom out" title="Zoom out">−</button>
-            <span id="zoomLevel">100%</span>
-            <button id="zoomIn" type="button" aria-label="Zoom in" title="Zoom in">+</button>
-            <button id="fitMap" type="button" title="Reset view">Fit</button>
-            <button id="focusHandover" type="button" title="Center on Handover Highway corridor">Handover Zone</button>
-            <button id="trackCar" type="button" title="Smoothly track and follow focus car">Track Car</button>
-          </div>
-        </div>
-
-        <div class="device-bar" id="deviceBar" aria-label="Select device to inspect">
-          <span class="device-bar-label">INSPECT UE:</span>
-          <div class="device-chips" id="deviceChips"></div>
-        </div>
-
-        <div class="canvas-frame">
-          <canvas id="networkCanvas" aria-label="Zoomable map of six devices and four towers"></canvas>
-        </div>
-
-        <!-- Live Line Activity & Real-Time Explanation HUD -->
-        <div class="line-status-hud" id="lineStatusHud" aria-label="Live Line Activity and Explanation">
-          <div class="hud-header">
-            <div class="hud-title-wrap">
-              <span class="hud-live-dot" aria-hidden="true"></span>
-              <span class="hud-title">LIVE LINE ACTIVITY &amp; EXPLANATION</span>
-            </div>
-            <span class="hud-selected-ue" id="hudSelectedUe">INSPECTING: UE0 (URLLC Car)</span>
-          </div>
-          <div class="hud-grid">
-            <div class="hud-card beam" id="hudBeamCard">
-              <div class="hud-card-top">
-                <span class="hud-line-indicator beam"></span>
-                <span class="hud-card-name">5G SERVING BEAM</span>
-                <span class="hud-badge active" id="hudBeamBadge">ACTIVE</span>
-              </div>
-              <p class="hud-card-text" id="hudBeamText">Serving Tower C0 ➔ UE0 · 4/4 RBs (72% RSRP)</p>
-            </div>
-
-            <div class="hud-card reservation" id="hudResCard">
-              <div class="hud-card-top">
-                <span class="hud-line-indicator reservation"></span>
-                <span class="hud-card-name">PPO PRE-ALLOCATION ARC (EQ. 21)</span>
-                <span class="hud-badge idle" id="hudResBadge">IDLE</span>
-              </div>
-              <p class="hud-card-text" id="hudResText">Inside cell coverage · No pre-allocation needed yet</p>
-            </div>
-
-            <div class="hud-card backhaul" id="hudBackhaulCard">
-              <div class="hud-card-top">
-                <span class="hud-line-indicator backhaul"></span>
-                <span class="hud-card-name">3GPP Xn BACKHAUL MESH</span>
-                <span class="hud-badge standby" id="hudBackhaulBadge">MONITORING</span>
-              </div>
-              <p class="hud-card-text" id="hudBackhaulText">Inter-gNB optical fiber mesh ready for handover coordination</p>
-            </div>
-
-            <div class="hud-card handover" id="hudHoCard">
-              <div class="hud-card-top">
-                <span class="hud-line-indicator handover"></span>
-                <span class="hud-card-name">HANDOVER TRANSFER</span>
-                <span class="hud-badge nominal" id="hudHoBadge">NOMINAL</span>
-              </div>
-              <p class="hud-card-text" id="hudHoText">Connected to Tower C0 · Signal healthy</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="map-legend">
-          <div class="legend-header">
-            <span class="legend-title">LINE GUIDE &amp; SPOTLIGHT:</span>
-          </div>
-          <div class="legend-items">
-            <button type="button" class="legend-pill" data-line="beam" title="5G NR Massive MIMO beam (Serving Tower ➔ Selected UE). High-frequency carrier.">
-              <span class="pill-symbol beam"></span> 5G Serving Beam
-            </button>
-            <button type="button" class="legend-pill" data-line="reservation" title="Predictive PPO Capacity Reservation Arc (Target Tower ➔ Car, Eq. 21). Pre-allocates PRBs.">
-              <span class="pill-symbol reservation"></span> PPO Pre-Allocation Arc (Eq. 21)
-            </button>
-            <button type="button" class="legend-pill" data-line="trail" title="Historical motion trajectory &amp; forward prediction vector (T_horizon = 5 steps).">
-              <span class="pill-symbol trail"></span> Trajectory &amp; Horizon (t+5s)
-            </button>
-            <button type="button" class="legend-pill" data-line="overloaded" title="Overloaded Base Station: Free RBs exhausted. Steered clear / connection avoided by PPO.">
-              <span class="pill-symbol overloaded"></span> Overloaded Cell (Avoided)
-            </button>
-            <button type="button" class="legend-pill" data-line="congested" title="Congested Radio Link: 0 PRBs allocated because tower is at 100% capacity. Device is queued.">
-              <span class="pill-symbol congested"></span> Congested Link (0 RB)
-            </button>
-            <button type="button" class="legend-pill" data-line="hex" title="Authentic 7-Cell Hexagonal Honeycomb Coverage Tiling.">
-              <span class="pill-symbol hex"></span> 7-Cell Honeycomb Boundary
-            </button>
-            <button type="button" class="legend-pill" data-line="backhaul" title="3GPP Xn Inter-gNB Optical Fiber Backhaul Mesh (TS 38.423). Coordinates proactive handover and reservation.">
-              <span class="pill-symbol backhaul"></span> 3GPP Xn Backhaul Mesh
-            </button>
-          </div>
-          <span class="map-hint">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-            Click any device or tower on canvas · Wheel to zoom · Drag to pan · Hover a line to spotlight
-          </span>
-        </div>
-      </article>
-
-      <aside class="guide-rail">
-        <section class="step-card" aria-live="polite">
-          <div class="step-top">
-            <span id="phaseNumber">01</span>
-            <div class="phase-meta">
-              <p id="phaseLabel">APPROACH</p>
-              <div class="step-dots" aria-hidden="true">
-                <span class="dot active"></span>
-                <span class="dot"></span>
-                <span class="dot"></span>
-                <span class="dot"></span>
-              </div>
-            </div>
-          </div>
-          <h2 id="phaseTitle">Follow the highlighted car.</h2>
-          <p id="phaseText">Its serving tower sends RB service along the solid line. The red ring marks a weak distance-based signal proxy near a cell edge.</p>
-        </section>
-
-        <section class="rail-card">
-          <div class="eyebrow-badge">
-            <span class="badge-dot" aria-hidden="true"></span>
-            <p class="eyebrow">SAME MOVEMENT · DIFFERENT ADMISSION</p>
-          </div>
-          <h2>Handover outcome</h2>
-          <div class="outcome-grid">
-            <div class="outcome baseline">
-              <span class="outcome-tag">NO RESERVATION</span>
-              <strong id="normalOutcome">Waiting for crossing</strong>
-              <small id="normalScore">0 / 0 admitted</small>
-            </div>
-            <div class="outcome proposed">
-              <span class="outcome-tag">PPO RESERVATION</span>
-              <strong id="proposedOutcome">Watching for a hold</strong>
-              <small id="proposedScore">0 / 0 admitted</small>
-            </div>
-          </div>
-          <p class="fineprint">Admission requires the slice’s minimum RBs; full-demand QoS is checked separately.</p>
-        </section>
-
-        <section class="rail-card tower-card">
-          <div class="rail-title">
-            <div>
-              <div class="eyebrow-badge">
-                <span class="badge-dot" aria-hidden="true"></span>
-                <p class="eyebrow">CLICK A TOWER ON THE MAP</p>
-              </div>
-              <h2 id="towerHeading">Tower C0</h2>
-            </div>
-            <div class="tower-nav" id="towerNav"></div>
-          </div>
-          <div class="tower-ledgers">
-            <div id="normalTower"></div>
-            <div id="proposedTower"></div>
-          </div>
-          <p class="fineprint">Allocated + held + free = capacity. Orange is protected RB capacity, not guaranteed radio throughput.</p>
-        </section>
-
-        <section class="rail-card model-card">
-          <div class="eyebrow-badge">
-            <span class="badge-dot" aria-hidden="true"></span>
-            <p class="eyebrow">LOCAL MODEL DECISION</p>
-          </div>
-          <h2 id="decisionHeading">Waiting for a forecast</h2>
-          <p id="decisionText">PPO chooses reservation amount and activation time, never the destination tower.</p>
-          <div id="decisionFacts" class="decision-facts"></div>
-        </section>
-
-        <section class="rail-card event-card">
-          <div class="eyebrow-badge">
-            <span class="badge-dot" aria-hidden="true"></span>
-            <p class="eyebrow">REAL-TIME FLIGHT RECORDER</p>
-          </div>
-          <h2>Handover telemetry log</h2>
-          <div id="liveEventStream" class="event-stream" aria-live="polite">
-            <div class="event-row idle">Waiting for handover activity...</div>
-          </div>
-          <p class="fineprint">Chronological stream of proactive reservations and admission outcomes.</p>
-        </section>
-      </aside>
-    </section>
-
-    <!-- Real-Time Telemetry & Handover Stats Strip -->
-    <section class="stats-strip" aria-label="Real-time 5G Handover Telemetry">
-      <div class="stat-card">
-        <div class="stat-head">
-          <span class="stat-label">HANDOVER SUCCESS RATE</span>
-          <span id="statHsrDelta" class="stat-delta positive">—</span>
-        </div>
-        <div class="stat-compare">
-          <div class="stat-side baseline">
-            <small>NO RESERVATION</small>
-            <strong id="statHsrNormal">0.0%</strong>
-          </div>
-          <div class="stat-divider" aria-hidden="true">vs</div>
-          <div class="stat-side proposed">
-            <small>PPO PROACTIVE</small>
-            <strong id="statHsrProposed">0.0%</strong>
-          </div>
-        </div>
-        <div class="sparkline-wrap" id="hsrSparkWrap" title="Rolling trend over past simulation steps: PPO (emerald) vs Baseline (dashed gray)">
-          <div class="spark-scrub-tooltip" id="hsrScrubTooltip">Hover for step details</div>
-          <svg id="hsrSparkline" class="sparkline-svg" viewBox="0 0 200 44" preserveAspectRatio="none" aria-hidden="true">
-            <defs>
-              <linearGradient id="gradPpoHsr" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#10b981" stop-opacity="0.35" />
-                <stop offset="100%" stop-color="#10b981" stop-opacity="0.0" />
-              </linearGradient>
-              <linearGradient id="gradBaseHsr" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#94a3b8" stop-opacity="0.22" />
-                <stop offset="100%" stop-color="#94a3b8" stop-opacity="0.0" />
-              </linearGradient>
-            </defs>
-            <line class="spark-grid" x1="0" y1="4" x2="200" y2="4" />
-            <line class="spark-grid" x1="0" y1="22" x2="200" y2="22" />
-            <line class="spark-grid" x1="0" y1="40" x2="200" y2="40" />
-            <text class="spark-axis-label" x="4" y="9">100%</text>
-            <text class="spark-axis-label" x="4" y="26">50%</text>
-            <path id="hsrAreaNormal" class="spark-area normal" d="M0,40 L200,40 Z" />
-            <path id="hsrAreaProposed" class="spark-area proposed" d="M0,40 L200,40 Z" />
-            <path id="hsrSparkNormal" class="spark-line normal" d="M0,40 L200,40" />
-            <path id="hsrSparkProposed" class="spark-line proposed" d="M0,40 L200,40" />
-            <circle id="hsrDotNormal" class="spark-dot normal" cx="200" cy="40" r="3" />
-            <circle id="hsrDotProposed" class="spark-dot proposed" cx="200" cy="40" r="3.5" />
-            <line id="hsrScrubLine" class="spark-scrub-line" x1="0" y1="0" x2="0" y2="44" style="display:none;" />
-          </svg>
-          <div class="spark-legend">
-            <span class="spark-key normal">Baseline</span>
-            <span class="spark-key proposed">PPO Proactive</span>
-          </div>
-        </div>
-        <p class="stat-desc">Target cell admission rate upon boundary crossing</p>
-      </div>
-
-      <div class="stat-card">
-        <div class="stat-head">
-          <span class="stat-label">FULL-DEMAND QoS SATISFACTION</span>
-          <span id="statQosDelta" class="stat-delta positive">—</span>
-        </div>
-        <div class="stat-compare">
-          <div class="stat-side baseline">
-            <small>NO RESERVATION</small>
-            <strong id="statQosNormal">0.0%</strong>
-          </div>
-          <div class="stat-divider" aria-hidden="true">vs</div>
-          <div class="stat-side proposed">
-            <small>PPO PROACTIVE</small>
-            <strong id="statQosProposed">0.0%</strong>
-          </div>
-        </div>
-        <div class="sparkline-wrap" id="qosSparkWrap" title="Rolling QoS fulfillment rate: PPO (emerald) vs Baseline (dashed gray)">
-          <div class="spark-scrub-tooltip" id="qosScrubTooltip">Hover for step details</div>
-          <svg id="qosSparkline" class="sparkline-svg" viewBox="0 0 200 44" preserveAspectRatio="none" aria-hidden="true">
-            <defs>
-              <linearGradient id="gradPpoQos" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#10b981" stop-opacity="0.35" />
-                <stop offset="100%" stop-color="#10b981" stop-opacity="0.0" />
-              </linearGradient>
-              <linearGradient id="gradBaseQos" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#94a3b8" stop-opacity="0.22" />
-                <stop offset="100%" stop-color="#94a3b8" stop-opacity="0.0" />
-              </linearGradient>
-            </defs>
-            <line class="spark-grid" x1="0" y1="4" x2="200" y2="4" />
-            <line class="spark-grid" x1="0" y1="22" x2="200" y2="22" />
-            <line class="spark-grid" x1="0" y1="40" x2="200" y2="40" />
-            <text class="spark-axis-label" x="4" y="9">100%</text>
-            <text class="spark-axis-label" x="4" y="26">50%</text>
-            <path id="qosAreaNormal" class="spark-area normal" d="M0,40 L200,40 Z" />
-            <path id="qosAreaProposed" class="spark-area proposed" d="M0,40 L200,40 Z" />
-            <path id="qosSparkNormal" class="spark-line normal" d="M0,40 L200,40" />
-            <path id="qosSparkProposed" class="spark-line proposed" d="M0,40 L200,40" />
-            <circle id="qosDotNormal" class="spark-dot normal" cx="200" cy="40" r="3" />
-            <circle id="qosDotProposed" class="spark-dot proposed" cx="200" cy="40" r="3.5" />
-            <line id="qosScrubLine" class="spark-scrub-line" x1="0" y1="0" x2="0" y2="44" style="display:none;" />
-          </svg>
-          <div class="spark-legend">
-            <span class="spark-key normal">Baseline</span>
-            <span class="spark-key proposed">PPO Proactive</span>
-          </div>
-        </div>
-        <p class="stat-desc">Slice throughput & latency SLA fulfilled on arrival</p>
-      </div>
-
-      <div class="stat-card">
-        <div class="stat-head">
-          <span class="stat-label">RAN RESOURCE BLOCKS (RBs)</span>
-          <span class="stat-chip" id="statCapacityChip">Pool: 112 RB</span>
-        </div>
-        <div class="stat-metric-row">
-          <div>
-            <span class="metric-num" id="statTotalAlloc">0</span>
-            <small>Active RBs</small>
-          </div>
-          <div>
-            <span class="metric-num highlight" id="statTotalReserved">0</span>
-            <small>PPO Held</small>
-          </div>
-          <div>
-            <span class="metric-num" id="statCellLoad">0%</span>
-            <small>Avg Load</small>
-          </div>
-        </div>
-        <p class="stat-desc" id="statCapacityDesc">Capacity utilization across the 7 base stations</p>
-      </div>
-
-      <div class="stat-card">
-        <div class="stat-head">
-          <span class="stat-label">5G NETWORK SLICE TAXONOMY</span>
-          <span class="stat-chip">3GPP Rel-18</span>
-        </div>
-        <div class="slice-tags">
-          <span class="slice-tag urllc" title="Ultra-Reliable Low-Latency (Autonomous Vehicles)"><i class="dot"></i> uRLLC · Cars</span>
-          <span class="slice-tag embb" title="Enhanced Mobile Broadband (Streaming Drones)"><i class="dot"></i> eMBB · Drones</span>
-          <span class="slice-tag mmtc" title="Massive Machine-Type (Industrial Sensors/Robots)"><i class="dot"></i> mMTC · Robots</span>
-        </div>
-        <p class="stat-desc">Priority isolation prevents eMBB from starving critical cars</p>
-      </div>
-    </section>
-
-    <!-- 7-Stage End-to-End Handover Pipeline (text2.txt Architecture) -->
-    <section class="pipeline-card" aria-label="5G Handover Decision Pipeline">
-      <div class="pipeline-header">
-        <div class="pipeline-title-group">
-          <div class="eyebrow-badge">
-            <span class="badge-dot" aria-hidden="true"></span>
-            <p class="eyebrow">RESEARCH ARCHITECTURE · TEXT2.TXT PIPELINE</p>
-          </div>
-          <h3>7-Stage Closed-Loop Predictive Handover Sequence</h3>
-        </div>
-        <p class="pipeline-desc">Real-time mapping of UE mobility through PPO observation, masked reservation action, target admission, and SLA reward feedback.</p>
-      </div>
-      <div class="pipeline-flow" id="pipelineFlow">
-        <div class="pipe-node active" id="pipeMobility" data-stage="0">
-          <span class="pipe-num">01</span>
-          <span class="pipe-label">Mobility</span>
-          <small class="pipe-sub">Telemetry &amp; Velocity</small>
-        </div>
-        <div class="pipe-node" id="pipePrediction" data-stage="1">
-          <span class="pipe-num">02</span>
-          <span class="pipe-label">Prediction</span>
-          <small class="pipe-sub">Target &amp; Arrival</small>
-        </div>
-        <div class="pipe-node" id="pipeUncertainty" data-stage="2">
-          <span class="pipe-num">03</span>
-          <span class="pipe-label">Uncertainty</span>
-          <small class="pipe-sub">Distance Proxy</small>
-        </div>
-        <div class="pipe-node" id="pipePpo" data-stage="3">
-          <span class="pipe-num">04</span>
-          <span class="pipe-label">PPO Decision</span>
-          <small class="pipe-sub">Action [b, q, d]</small>
-        </div>
-        <div class="pipe-node" id="pipeReservation" data-stage="4">
-          <span class="pipe-num">05</span>
-          <span class="pipe-label">Reservation</span>
-          <small class="pipe-sub">Capacity Contract</small>
-        </div>
-        <div class="pipe-node" id="pipeHandover" data-stage="5">
-          <span class="pipe-num">06</span>
-          <span class="pipe-label">Handover</span>
-          <small class="pipe-sub">Cell Admission</small>
-        </div>
-        <div class="pipe-node" id="pipeFeedback" data-stage="6">
-          <span class="pipe-num">07</span>
-          <span class="pipe-label">Feedback</span>
-          <small class="pipe-sub">QoS Reward (Eq. 34)</small>
-        </div>
-      </div>
-    </section>
-
-    <!-- Visual 5G Handover Slicing Concept Explainer -->
-    <details class="concept-explainer" open>
-      <summary class="explainer-toggle">
-        <div class="explainer-summary-title">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-          <strong>How 5G Handover Slicing Works in This Lab</strong>
-          <span class="explainer-pill">Interactive Overview</span>
-        </div>
-        <span class="toggle-text">Toggle guide</span>
-      </summary>
-      <div class="explainer-cards">
-        <div class="concept-card reactive">
-          <div class="concept-badge">1. The Reactive Bottleneck</div>
-          <h3>Why Normal 5G Handovers Drop</h3>
-          <p>A standard 5G network waits until the car actually crosses the cell boundary before requesting radio resources at Tower C0. If Tower C0 is congested with background broadband traffic, only partial capacity (e.g. 3/7 RBs) is available — <strong>Handover fails and the uRLLC link disconnects</strong>.</p>
-        </div>
-        <div class="concept-card predictive">
-          <div class="concept-badge">2. PPO Reinforcement Learning</div>
-          <h3>Anticipating the Crossing</h3>
-          <p>The ProRAN agent monitors vehicle mobility telemetry and distance proxies. Approximately 1.5 seconds before arrival, PPO chooses to issue an <strong>advance reservation contract</strong> for 8 RBs at target Tower C0, protecting critical capacity ahead of time.</p>
-        </div>
-        <div class="concept-card seamless">
-          <div class="concept-badge">3. Zero-Drop Admission</div>
-          <h3>Guaranteed SLA Satisfaction</h3>
-          <p>When the car reaches Tower C0, its 7 RBs are already reserved and instantly allocated. Full throughput is met (7/7 RBs), avoiding radio link failure while releasing unused background blocks immediately back to the pool.</p>
-        </div>
-        <div class="concept-card slicing">
-          <div class="concept-badge">4. Slicing &amp; Priority Isolation</div>
-          <h3>Guaranteed SLA Compliance</h3>
-          <p>Each tower pool (18–20 RBs) dynamically isolates high-bandwidth eMBB drones from latency-sensitive uRLLC cars. Proactive holds safely yield background broadband blocks, guaranteeing zero drops on critical vehicle telemetry.</p>
-        </div>
-      </div>
-    </details>
-
-    <!-- Research Mathematics Verification Drawer -->
-    <details class="concept-explainer math-drawer">
-      <summary class="explainer-toggle">
-        <div class="explainer-summary-title">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-          <strong>Research Mathematics &amp; Formulation Provenance</strong>
-          <span class="explainer-pill">PROJECT_EQUATIONS.md · text1 · text2 · PreNS PDF</span>
-        </div>
-        <span class="toggle-text">Toggle equations</span>
-      </summary>
-      <div class="math-grid">
-        <div class="math-card">
-          <div class="math-head">
-            <span class="math-eq-tag">Eq. (1) &amp; (2)</span>
-            <strong>Capacity &amp; Free RB Invariant</strong>
-          </div>
-          <p class="math-formula">A_{j,t} + \sum_i B_{i,j,t} \le K_j \quad\implies\quad F_{j,t} = K_j - A_{j,t} - \sum_i B_{i,j,t} \ge 0</p>
-          <p class="math-desc">Conserves cell capacity \(K_j\); active allocations \(A\) plus PPO reservations \(B\) never exceed total tower budget.</p>
-        </div>
-        <div class="math-card">
-          <div class="math-head">
-            <span class="math-eq-tag">Eq. (18) – (20)</span>
-            <strong>Action Admissibility Bounds</strong>
-          </div>
-          <p class="math-formula">a_{i,j,t} = (b, q, d), \quad 0 \le d \le \hat h_{i,j,t} - t, \quad 1 \le q \le \hat D_{i,j,t}</p>
-          <p class="math-desc">Reservation cannot exceed predicted demand and must activate before predicted crossing interval \(\hat h\).</p>
-        </div>
-        <div class="math-card">
-          <div class="math-head">
-            <span class="math-eq-tag">Eq. (22)</span>
-            <strong>Handover Accounting &amp; Waste</strong>
-          </div>
-          <p class="math-formula">U_i^{\rm used} = Y_i^{\rm HO}\min(D_i, B_i^{\rm live}), \quad U_i^{\rm unused} = B_i^{\rm live} - U_i^{\rm used}</p>
-          <p class="math-desc">A failed handover uses 0 reserved RBs; unused activated reservations are penalized as waste \(w_t\).</p>
-        </div>
-        <div class="math-card">
-          <div class="math-head">
-            <span class="math-eq-tag">Eq. (34)</span>
-            <strong>Linear PPO Scalarized Reward</strong>
-          </div>
-          <p class="math-formula">r_t = \alpha h_t + \beta q_t - \gamma w_t - \delta c_t \quad (\alpha=2.0, \beta=3.0, \gamma=1.5, \delta=0.25)</p>
-          <p class="math-desc">Directly trades off handover reliability \(h\) and QoS satisfaction \(q\) against reservation waste \(w\) and occupancy \(c\).</p>
-        </div>
-      </div>
-    </details>
-
-    <section class="evidence">
-      <div class="evidence-body">
-        <div class="eyebrow-badge">
-          <span class="badge-dot" aria-hidden="true"></span>
-          <p class="eyebrow">RESEARCH CONTEXT</p>
-        </div>
-        <h2>What this does—and does not—prove.</h2>
-        <p>These are curated six-device teaching traces, not the evaluation set. The saved controller is a <strong>linear PPO RL model, not deep learning</strong>. Handover target selection is geometric; forecast confidence is heuristic, and signal colors are a distance proxy rather than measured RSRP/SINR. This is a synthetic system-level demonstrator, not a field-ready 5G controller.</p>
-      </div>
-      <div class="benchmark">
-        <div class="benchmark-header">
-          <small>SEPARATE 20-SEED, 32-DEVICE BENCHMARK</small>
-        </div>
-        <strong id="benchmarkStat">Loading…</strong>
-        <span>Handover admission rate. PPO is not best against every baseline.</span>
-        <a href="/paper.tex" class="benchmark-link">View manuscript source →</a>
-      </div>
-    </section>
-  </main>
-
-  <footer>
-    <div class="footer-inner">
-      <span>ProRAN · Synthetic research demonstrator · RB = resource block</span>
-      <span class="footer-sub">3GPP Rel-18 Radio Access Network Slicing Simulation Engine</span>
-    </div>
-  </footer>
+<section id="guide" class="guide-section">
+<p class="eyebrow">UNDERSTAND THE EXPERIMENT</p>
+<h2>Capacity before the crossing.</h2>
+<div class="explainer-cards">
+<article>
+<span class="eyebrow">01 · FORECAST</span>
+<h3>Look a few intervals ahead.</h3>
+<p>A synthetic predictor projects motion and estimates a target, arrival interval, and RB demand. Its score is heuristic and can be wrong.</p>
+</article>
+<article>
+<span class="eyebrow">02 · RESERVE</span>
+<h3>Hold capacity when it is useful.</h3>
+<p>The deep controller forecasts future position and PRB demand with a trained two-hidden-layer network, then applies a fixed reservation rule. QoS target selection considers signal, capacity and latency. The legacy linear PPO is available for comparison. Pending requests use no capacity; activation can be rejected.</p>
+</article>
+<article>
+<span class="eyebrow">03 · COMPARE</span>
+<h3>Check what actually happened.</h3>
+<p>Both policies see identical movement and traffic. Admission needs the slice minimum and a successful radio draw. QoS also needs full demand and latency within its limit.</p>
+</article>
+</div>
+<details class="concept-explainer">
+<summary>Slice priorities and modeling assumptions</summary>
+<div class="details-body">
+<p>Each cell schedules uRLLC first, eMBB second, then mMTC, with device ID breaking ties. This is a priority scheduler, not guaranteed slice isolation.</p>
+<div class="slice-profiles" id="sliceProfiles">
+</div>
+<p>Icons are visual categories; a car, drone, or robot can use any slice. Movement is in abstract world units per interval. Cell regions show nearest-site geography. In QoS mode, eligible neighboring towers can serve a device based on load and signal. A failed handover updates the assigned target but allocates zero PRBs; the next interval reschedules it. This is a capacity model, not a persistent radio connection or packet-level simulation.</p>
+<p>There is no simulated RSRP, SINR, A3 trigger, optical backhaul, beamforming, packet loss, or zero-delay transfer. Optional site connections are illustrative.</p>
+</div>
+</details>
+<details class="concept-explainer math-drawer">
+<summary>Math and accounting, explained</summary>
+<div class="math-grid details-body">
+<article>
+<h3>Cell capacity</h3>
+<p class="math-formula">allocated + active holds + free = capacity</p>
+<p>Integer RB counts share one scheduling interval. Pending requests are excluded from active holds.</p>
+</article>
+<article>
+<h3>Reservation use</h3>
+<p class="math-formula">used = admitted × min(demand, matching active hold)</p>
+<p>Wrong-target and pending holds cannot serve an arrival. A failed admission consumes zero reserved RBs. Remaining held RBs are released or expire.</p>
+</article>
+<article>
+<h3>Admission and QoS</h3>
+<p class="math-formula">available = min(demand, matching hold + free)</p>
+<p>Admission requires available ≥ slice minimum and a successful radio draw. QoS additionally requires available ≥ demand and modeled latency ≤ slice limit.</p>
+</article>
+<article>
+<h3>Training reward</h3>
+<p class="math-formula">reward = 2h + 3q − 1.5w − 0.25c</p>
+<p>h and q are interval handover admission and QoS fractions (zero with no crossing); w is settled unused RBs / network capacity; c is active held RBs / network capacity. Live playback uses the frozen policy and does not retrain it.</p>
+</article>
+</div>
+</details>
+</section>
+<section class="evidence">
+<div>
+<p class="eyebrow">SEPARATE HELD-OUT EVALUATION</p>
+<h2>A demonstration, with measurable limits.</h2>
+<p>These small scenarios explain individual decisions. The separate benchmark uses 32 devices and 20 matched seeds. PPO improves on no reservation in that evaluation, while other heuristics achieve higher admission rates at higher reservation cost. This synthetic system-level model is not field validation.</p>
+</div>
+<div class="benchmark">
+<small>BENCHMARK HANDOVER ADMISSION</small>
+<strong id="benchmarkStat">Loading…</strong>
+<span>PPO vs no reservation</span>
+<a href="/paper.tex" target="_blank" rel="noopener">Read manuscript ↗</a>
+</div>
+</section>
+</main>
+<footer>ProRAN · Synthetic research demonstrator · RB = resource block</footer>
+<div id="errorNotice" class="error-notice" role="alert" hidden>
+</div>
 </body>
 </html>

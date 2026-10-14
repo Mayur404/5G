@@ -9,10 +9,28 @@ description = "Uncertainty-aware proactive reservation for sliced 5G RAN handove
 requires-python = ">=3.10"
 dependencies = ["numpy", "matplotlib", "rich"]
 
+[project.optional-dependencies]
+web = ["Flask>=3.1,<4", "waitress>=3,<4"]
+dev = ["pytest>=8,<9", "ruff==0.14.0"]
+
+[project.scripts]
+proran = "proran.cli:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
-addopts = "--basetemp=.pytest_tmp"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/proran/plotting.py" = ["E402"]
+"src/proran/research_report.py" = ["E402"]
+"web/research_report.py" = ["E402"]

@@ -1,0 +1,63 @@
+{
+  "frozen_at_utc": "2026-10-04T15:07:03.077602+00:00",
+  "final_evaluation_seeds": [
+    10000,
+    10001,
+    10002,
+    10003,
+    10004,
+    10005,
+    10006,
+    10007,
+    10008,
+    10009,
+    10010,
+    10011,
+    10012,
+    10013,
+    10014,
+    10015,
+    10016,
+    10017,
+    10018,
+    10019
+  ],
+  "development_evaluation_seeds": [
+    9000,
+    9001,
+    9002,
+    9003,
+    9004,
+    9005,
+    9006,
+    9007,
+    9008,
+    9009,
+    9010,
+    9011,
+    9012,
+    9013,
+    9014,
+    9015,
+    9016,
+    9017,
+    9018,
+    9019
+  ],
+  "source_sha256": {
+    "src/proran/simulator.py": "3428ba6ad7bb260ed35568dbfb6cfaab169827222fa0dbdd1aa0b9dcd82614f7",
+    "src/proran/neural.py": "3a78797ff7ca16740f6e64e0bcabb7f7f31d67b3d5441b0e5ab62ac85a67d493",
+    "src/proran/config.py": "d83a29dc69583a712548e4ae1f680476f2e0b8f3ae7e3af36a8184962c616d61",
+    "src/proran/deep_experiment.py": "14287339337b600aed92b769a125d74f723192d89e822c29a5dbc7e715e66737"
+  },
+  "predictor_sha256": "5c137bd24f9dde1f7faf772b1d60fa32915db30eb43da149901a8fc060ea2b11",
+  "target_score_weights": [
+    0.45,
+    0.25,
+    0.2,
+    0.1
+  ],
+  "hysteresis": 0.06,
+  "time_to_trigger_steps": 2,
+  "policy_parameters_selected_using_final_test": false
+}

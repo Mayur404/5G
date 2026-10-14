@@ -1,0 +1,8 @@
+{
+  "status": "passed",
+  "completed_at_utc": "2026-10-04T15:04:03.980706+00:00",
+  "run_summaries": 120,
+  "independent_metric_checks": 459,
+  "train_validation_test_seeds_disjoint": true,
+  "held_out_prediction_examples": 197120
+}
