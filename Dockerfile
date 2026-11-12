@@ -10,9 +10,10 @@ WORKDIR /app
 COPY requirements-web.txt ./
 COPY src ./src
 COPY web ./web
-COPY paper.tex references.bib ./
-COPY results/results.json results/ppo_model.npz results/training_history.csv results/imitation_history.csv results/paired_comparisons.csv ./results/
-COPY results/deep/predictor.npz results/deep/results.json ./results/deep/
+COPY paper.tex paper.pdf references.bib ./
+COPY results/deep/predictor.npz ./results/deep/
+COPY results/care/calibrator.npz results/care/tuning.json results/care/summary.csv ./results/care/
+COPY results/care/models/*.npz ./results/care/models/
 RUN pip install --no-cache-dir -r requirements-web.txt && \
     useradd --create-home --uid 10001 proran && chown -R proran:proran /app
 

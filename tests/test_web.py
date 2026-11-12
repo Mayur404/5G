@@ -1,9 +1,8 @@
+import math
+
 import pytest
 
-from proran.config import SimConfig
-from proran.policies import SavedPPOPolicy, no_reservation
-from proran.simulator import RANHandoverEnv
-from web.server import MODEL, ComparisonSession, create_app
+from web.server import CARE_MECHANICS, ComparisonSession, care_available, create_app
 
 
 def test_health_and_static_index():
@@ -22,9 +21,8 @@ def test_health_and_static_index():
     assert client.get("/paper.tex").status_code == 200
     assert client.get("/references.bib").status_code == 200
     meta = client.get("/api/meta").get_json()
-    assert meta["learning"]["imitation"]
-    assert meta["learning"]["ppo"]
-    assert len(meta["paired"]) == 8
+    assert [row["name"] for row in meta["slices"]] == ["eMBB", "uRLLC", "mMTC"]
+    assert set(meta["controllers"]) == {"care", "deep_qos", "deep_nearest"}
 
 
 def test_comparison_api_uses_paired_mobility_and_safe_capacity():
@@ -61,8 +59,9 @@ def test_comparison_api_uses_paired_mobility_and_safe_capacity():
             assert network["metrics"]["successes"] <= network["metrics"]["handovers"]
         decision = proposed["decision"]
         if decision and decision["ue"] is not None:
-            assert decision["distribution"]
-            assert abs(sum(item["probability"] for item in decision["distribution"]) - 1.0) < 1e-9
+            values = [item["value"] for item in decision["distribution"]]
+            assert values == sorted(values, reverse=True)
+            assert decision["committed"] <= decision["candidates"]
 
 
 def test_unknown_session_is_reported():
@@ -81,42 +80,21 @@ def test_teaching_scenarios_are_six_device_capacity_cases():
     )
 
 
-def test_urban_web_trace_matches_offline_policies():
+def test_curated_trace_shows_care_rescuing_a_urllc_handover():
     session = ComparisonSession(21, "urban")
-    session.step(12)
-    session.step(12)
-    session.step(12)
-    session.step(4)
-    cfg = SimConfig(seed=21, n_ues=6, cell_capacity=18, episode_steps=40)
-    baseline = RANHandoverEnv(cfg).run(no_reservation, steps=40, seed=21)
-    learned = RANHandoverEnv(cfg).run(SavedPPOPolicy.load(str(MODEL)), steps=40, seed=21)
-    assert session.normal.metrics.handovers == baseline.handovers
-    assert session.normal.metrics.successes == baseline.successes
-    assert session.proposed.metrics.successes == learned.successes
-    assert session.proposed.metrics.occupancy_rb_intervals == learned.occupancy_rb_intervals
-
-
-def test_curated_trace_shows_real_proactive_handover_gain():
-    session = ComparisonSession(21, "urban")
-    reservations = []
-    for step in range(1, 8):
-        snap = session.step()
-        reservations.extend(
-            event for event in snap["proposed"]["events"] if event.startswith("reserve ")
-        )
-        if step == 4:
-            target = snap["proposed"]["cells"][0]
-            assert target["reserved"] == 8
-            assert target["allocated"] + target["reserved"] == target["capacity"]
-            assert any(
-                c["ue"] == 1 and c["target"] == 0 and c["active"]
-                for c in snap["proposed"]["contracts"]
-            )
-    assert any("UE1" in event and "C0" in event for event in reservations)
-    assert any("HO UE1 C2->C0 SUCCESS (7/7RB)" in event for event in snap["proposed"]["events"])
-    assert any("HO UE1 C2->C0 FAIL (3/7RB)" in event for event in snap["normal"]["events"])
-    assert snap["proposed"]["metrics"]["qos_successes"] == 1
-    assert snap["normal"]["metrics"]["qos_successes"] == 0
+    snap = session.step()
+    first = snap["proposed"]["decision"]
+    assert first["ue"] == 1 and first["target"] == 0 and first["amount_rbs"] == 5
+    assert first["action"] != 0 and "admission floor" in first["label"]
+    snap = session.step(3)
+    target = snap["proposed"]["cells"][0]
+    assert target["reserved"] == 5
+    assert any(
+        c["ue"] == 1 and c["target"] == 0 and c["active"] for c in snap["proposed"]["contracts"]
+    )
+    snap = session.step(3)
+    assert any("HO UE1 C2->C0 SUCCESS (5/7RB)" in e for e in snap["proposed"]["events"])
+    assert any("HO UE1 C2->C0 FAIL (3/7RB)" in e for e in snap["normal"]["events"])
 
 
 def test_six_device_paired_trace_and_capacity_invariants_across_seeds():
@@ -146,17 +124,18 @@ def test_second_six_device_trace_has_measured_early_gain():
     session.step(2)
     result = session.step()
     assert any("HO UE2 C2->C0 FAIL (4/6RB)" in event for event in result["normal"]["events"])
-    assert any("HO UE2 C2->C0 SUCCESS (6/6RB)" in event for event in result["proposed"]["events"])
+    assert any("HO UE2 C2->C0 SUCCESS (5/6RB)" in event for event in result["proposed"]["events"])
     assert result["normal"]["metrics"]["successes"] == 0
     assert result["proposed"]["metrics"]["successes"] == 1
 
 
-def test_web_refuses_to_claim_ppo_when_saved_model_missing(tmp_path, monkeypatch):
-    monkeypatch.setattr("web.server.MODEL", tmp_path / "missing_model.npz")
+def test_web_refuses_to_run_care_without_trained_artifacts(tmp_path, monkeypatch):
+    monkeypatch.setattr("web.server.CARE_DIR", tmp_path)
     client = create_app().test_client()
-    response = client.post("/api/session", json={"scenario": "urban", "seed": 21})
+    response = client.post("/api/session", json={"scenario": "urban", "controller": "care"})
     assert response.status_code == 503
-    assert "Saved PPO model is missing" in response.get_json()["error"]
+    assert "CARE" in response.get_json()["error"]
+    assert client.post("/api/session", json={"controller": "deep_qos"}).status_code == 200
 
 
 def test_bad_inputs_return_client_errors_and_security_headers():
@@ -185,25 +164,27 @@ def test_history_preserves_undefined_rates_and_time_units():
 def test_live_waste_excludes_still_active_holds():
     session = ComparisonSession(21, "urban")
     snap = session.step(4)
-    assert snap["proposed"]["cells"][0]["reserved"] == 8
+    assert snap["proposed"]["cells"][0]["reserved"] == 5
     assert snap["proposed"]["metrics"]["settled_unused_reservation_fraction"] is None
     snap = session.step(3)
-    assert snap["proposed"]["metrics"]["settled_unused_reservation_fraction"] == 1 / 8
+    assert snap["proposed"]["metrics"]["settled_unused_reservation_fraction"] == 0
 
 
 def test_handover_records_separate_admission_allocation_and_qos():
     snap = ComparisonSession(21, "urban").step(7)
     base = next(e for e in snap["normal"]["handover_details"] if e["ue"] == 1)
-    ppo = next(e for e in snap["proposed"]["handover_details"] if e["ue"] == 1)
+    care = next(e for e in snap["proposed"]["handover_details"] if e["ue"] == 1)
     assert base["available_rbs"] == 3 and base["allocated_rbs"] == 0
     assert not base["success"] and not base["qos"]
-    assert ppo["allocated_rbs"] == ppo["demand_rbs"] == 7
-    assert ppo["success"] and ppo["qos"]
-    assert ppo["latency_ms"] <= ppo["latency_limit_ms"]
+    # The held admission floor admits the arrival; at 5 of 7 RB its modeled
+    # latency exceeds the uRLLC limit, so admission and QoS are reported separately.
+    assert care["reserved_rbs"] == care["allocated_rbs"] == care["minimum_rbs"] == 5
+    assert care["success"] and not care["qos"]
+    assert care["latency_ms"] > care["latency_limit_ms"]
     settled = next(
         e for e in snap["proposed"]["contract_events"] if e["kind"] == "settled" and e["ue"] == 1
     )
-    assert settled["used_rbs"] == 7 and settled["amount_rbs"] == 8
+    assert settled["used_rbs"] == settled["amount_rbs"] == 5
 
 
 def test_handover_history_survives_batch_steps_and_carries_original_time():
@@ -211,7 +192,7 @@ def test_handover_history_survives_batch_steps_and_carries_original_time():
     event = next(e for e in snap["proposed"]["recent_handovers"] if e["ue"] == 1)
     assert event["source"] == 2 and event["target"] == 0
     assert event["step"] == 7 and event["time"] == pytest.approx(0.7)
-    assert event["success"] and event["allocated_rbs"] == 7
+    assert event["success"] and event["allocated_rbs"] == 5
     assert "x" in event and "y" in event
 
 
@@ -226,3 +207,44 @@ def test_api_rejects_non_objects_and_fractional_seeds():
         assert client.post("/api/session", json={"seed": value}).status_code == 400
     default = client.post("/api/session", json={"scenario": "urban"}).get_json()
     assert default["snapshot"]["seed"] == 21
+    assert default["snapshot"]["controller_kind"] == "care"
+
+
+@pytest.mark.skipif(not care_available(), reason="trained CARE artifacts are not present")
+@pytest.mark.parametrize("scenario", ["hex_cluster", "benchmark"])
+def test_care_session_matches_paper_mechanics_and_preserves_capacity(scenario):
+    client = create_app().test_client()
+    created = client.post(
+        "/api/session", json={"scenario": scenario, "seed": 9000, "controller": "care"}
+    )
+    assert created.status_code == 200
+    token = created.get_json()["session"]
+    decisions = 0
+    for _ in range(20):
+        snapshot = client.post("/api/step", json={"session": token, "count": 3}).get_json()
+        assert snapshot["controller_kind"] == "care"
+        for name in ("normal", "proposed"):
+            network = snapshot[name]
+            # Matched mobility: both networks place every device identically.
+            for cell in network["cells"]:
+                assert cell["allocated"] + cell["reserved"] + cell["free"] == cell["capacity"]
+        assert [u["x"] for u in snapshot["normal"]["ues"]] == [
+            u["x"] for u in snapshot["proposed"]["ues"]
+        ]
+        decision = snapshot["proposed"]["decision"]
+        if decision:
+            decisions += 1
+            values = {item["action"]: item["value"] for item in decision["distribution"]}
+            assert all(math.isfinite(v) for v in values.values())
+            # The shown decision is the greedy action of the Q-ensemble.
+            assert values[decision["action"]] == max(values.values())
+            assert decision["committed"] <= decision["candidates"]
+    assert decisions > 0
+    session = ComparisonSession(9000, scenario, "care")
+    for env in (session.normal, session.proposed):
+        for key, value in CARE_MECHANICS.items():
+            assert getattr(env.cfg, key) == value
+    assert session.proposed.confidence_model is not None
+    assert session.normal.confidence_model is None
+    meta = client.get("/api/meta").get_json()
+    assert meta["care_available"] is True

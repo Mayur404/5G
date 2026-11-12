@@ -6,8 +6,8 @@
 <meta name="theme-color" content="#112746">
 <title>ProRAN | Predictive handover lab</title>
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/static/workspace.css?v=20261004-6">
-<script src="/static/lab.js?v=20261007-2" defer>
+<link rel="stylesheet" href="/static/workspace.css?v=20261112-1">
+<script src="/static/lab.js?v=20261112-1" defer>
 </script>
 </head>
 <body>
@@ -29,9 +29,9 @@
 <div class="intro-title"><p class="eyebrow">PREDICTIVE HANDOVER SIMULATOR</p><h1 id="pageTitle">Your network, in motion.</h1></div>
 <div class="controls">
 <div class="scenario-control"><label class="eyebrow" for="scenario">SCENARIO</label><select id="scenario">
-<option value="hex_cluster" selected>Seven-cell cluster</option><option value="urban">Six-device walkthrough</option><option value="crossing">Fast crossing</option><option value="five_cells">Five-cell overlap</option></select></div>
-<div class="scenario-control controller-control"><label class="eyebrow" for="controller">CONTROLLER</label><select id="controller"><option value="deep_qos" selected>Deep forecast + QoS target</option><option value="deep_nearest">Deep forecast + nearest target</option><option value="linear_ppo">Legacy linear PPO</option></select></div>
-<div class="playback-actions"><button id="playBtn" class="primary" type="button" aria-pressed="false"><span id="playIcon" aria-hidden="true">Ⅱ</span><span id="playText">Pause</span></button><button id="restartBtn" type="button" title="Replay this scenario with the same seed"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10a8 8 0 1 1 1 8M4 4v6h6"/></svg><span>Replay</span></button></div>
+<option value="hex_cluster" selected>Seven-cell cluster</option><option value="urban">Six-device walkthrough</option><option value="crossing">Fast crossing</option><option value="five_cells">Five-cell overlap</option><option value="benchmark">Paper benchmark (32 devices)</option></select></div>
+<div class="scenario-control controller-control"><label class="eyebrow" for="controller">CONTROLLER</label><select id="controller"><option value="care" selected>CARE (proposed)</option><option value="deep_qos">Forecast rule + QoS-aware target</option><option value="deep_nearest">Forecast rule + nearest target</option></select></div>
+<div class="playback-actions"><label class="visually-hidden" for="speed">Playback speed</label><select id="speed" class="speed-select" title="Playback speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select><button id="playBtn" class="primary" type="button" aria-pressed="false"><span id="playIcon" aria-hidden="true">Ⅱ</span><span id="playText">Pause</span></button><button id="restartBtn" type="button" title="Replay this scenario with the same seed"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10a8 8 0 1 1 1 8M4 4v6h6"/></svg><span>Replay</span></button></div>
 <div class="sim-clock"><small>SIM TIME</small><strong id="simTime">0.0 s</strong></div>
 </div>
 <p id="scenarioDescription" class="scenario-note">Ten devices share seven capacity-limited cells.</p>
@@ -40,7 +40,7 @@
 <section class="workspace" id="simulation" aria-label="Live simulation">
 <article class="map-panel">
 <div class="map-heading">
-<div class="map-title"><span class="live-indicator"></span><div><p class="eyebrow" id="mapEyebrow">LIVE PPO NETWORK · 7 CELLS / 10 DEVICES</p><h2>Network overview</h2></div></div>
+<div class="map-title"><span class="live-indicator"></span><div><p class="eyebrow" id="mapEyebrow">LIVE CARE NETWORK · 7 CELLS / 10 DEVICES</p><h2>Network overview</h2></div></div>
 <div class="map-actions"><button id="showInspector" class="icon-button" type="button" aria-pressed="true" title="Toggle inspector" aria-label="Toggle inspector"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg></button><button id="expandMap" class="icon-button" type="button" aria-pressed="false" title="Expand map" aria-label="Expand map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button></div>
 </div>
 <div class="device-bar">
@@ -57,6 +57,16 @@
 <button id="zoomIn" type="button" aria-label="Zoom in">+</button><span id="zoomLevel">100%</span><button id="zoomOut" type="button" aria-label="Zoom out">−</button><div class="zoom-divider"></div><button id="fitMap" type="button" title="Show the whole simulated world">Fit</button><button id="trackCar" type="button" aria-pressed="false" title="Follow the selected device">Follow</button>
 </div>
 <div class="map-scale" id="mapScale" aria-hidden="true"></div>
+<div class="map-scoreboard" id="mapScoreboard" aria-label="Live comparison on identical traffic">
+<p class="eyebrow">SAME TRAFFIC · TWO NETWORKS</p>
+<div class="score-grid">
+<span></span><b class="score-head proposed" id="scoreLabel">CARE</b><b class="score-head">NO RES.</b>
+<span>Handovers admitted</span><b class="proposed" id="scoreHsrP">—</b><b id="scoreHsrN">—</b>
+<span>Blocked handovers</span><b class="proposed" id="scoreBlockedP">0</b><b id="scoreBlockedN">0</b>
+<span>RBs held right now</span><b class="proposed" id="scoreHeldP">0</b><b>0</b>
+</div>
+<div class="score-key"><span><i style="--c:#8b5cf6"></i>eMBB</span><span><i style="--c:#2563eb"></i>uRLLC</span><span><i style="--c:#0d9da5"></i>mMTC</span><span><i class="hold"></i>Reservation</span></div>
+</div>
 <canvas id="networkCanvas" tabindex="0" aria-label="Interactive map of devices and cells. Use arrow keys to pan, plus and minus to zoom, F to fit, and Space to pause. Device and tower selectors provide an accessible alternative.">
 </canvas>
 </div>
@@ -73,7 +83,7 @@
 </div>
 </article>
 <aside class="guide-rail" aria-label="Network inspector">
-<div class="inspector-heading"><div><p class="eyebrow">LIVE TELEMETRY</p><h2>Inspector</h2></div><span class="inspector-badge">PPO</span></div>
+<div class="inspector-heading"><div><p class="eyebrow">LIVE TELEMETRY</p><h2>Inspector</h2></div><span class="inspector-badge">CARE</span></div>
 <div class="inspector-tabs" role="tablist" aria-label="Inspect network"><button id="tabDevice" type="button" role="tab" aria-selected="true" aria-controls="panelDevice" data-panel="Device">Device</button><button id="tabTowers" type="button" role="tab" aria-selected="false" aria-controls="panelTowers" data-panel="Towers" tabindex="-1">Towers</button><button id="tabEvents" type="button" role="tab" aria-selected="false" aria-controls="panelEvents" data-panel="Events" tabindex="-1">Events</button><button id="tabModel" type="button" role="tab" aria-selected="false" aria-controls="panelModel" data-panel="Model" tabindex="-1">Model</button></div>
 <div class="inspector-body"><div id="panelDevice" role="tabpanel" aria-labelledby="tabDevice">
 <section class="step-card">
@@ -96,7 +106,7 @@
 <small id="normalOutcomeDetail">—</small>
 </div>
 <div class="outcome proposed">
-<span class="outcome-tag">PPO RESERVATION</span>
+<span class="outcome-tag">CARE RESERVATION</span>
 <strong id="proposedOutcome">No crossing yet</strong>
 <small id="proposedOutcomeDetail">—</small>
 </div>
@@ -107,7 +117,7 @@
 <summary>What did the controller decide?</summary>
 <div class="details-body">
 <h2 id="decisionHeading">Waiting for a forecast</h2>
-<p id="decisionText">PPO chooses reservation amount and timing.</p>
+<p id="decisionText">The controller chooses whether, how much and when to hold capacity.</p>
 <div id="decisionFacts" class="decision-facts">
 </div>
 <div id="policyDistribution" class="policy-distribution" aria-label="Legal action probabilities">
@@ -156,7 +166,7 @@
 <strong id="statHsrNormal">—</strong>
 </div>
 <div>
-<small>PPO RESERVATION</small>
+<small>CARE RESERVATION</small>
 <strong id="statHsrProposed">—</strong>
 </div>
 </div>
@@ -164,7 +174,7 @@
 <span id="normalScore">0 / 0 admitted</span> · <span id="proposedScore">0 / 0 admitted</span>
 </p>
 <div class="sparkline-wrap" id="hsrSparkWrap">
-<svg id="hsrSparkline" class="sparkline-svg" role="img" viewBox="0 0 200 44" preserveAspectRatio="none" aria-label="Cumulative admission rate over recent intervals. Solid PPO; dashed no reservation. Rates remain undefined before the first attempt.">
+<svg id="hsrSparkline" class="sparkline-svg" role="img" viewBox="0 0 200 44" preserveAspectRatio="none" aria-label="Cumulative admission rate over recent intervals. Solid CARE; dashed no reservation. Rates remain undefined before the first attempt.">
 <path id="hsrSparkNormal" class="spark-line normal"/>
 <path id="hsrSparkProposed" class="spark-line proposed"/>
 <line id="hsrScrubLine" class="spark-scrub-line" y1="0" y2="44" hidden/>
@@ -183,18 +193,18 @@
 <strong id="statQosNormal">—</strong>
 </div>
 <div>
-<small>PPO RESERVATION</small>
+<small>CARE RESERVATION</small>
 <strong id="statQosProposed">—</strong>
 </div>
 </div>
 <p class="stat-desc">Admitted, full RB demand met, and modeled latency within limit.</p>
 <div class="sparkline-wrap" id="qosSparkWrap">
-<svg id="qosSparkline" class="sparkline-svg" role="img" viewBox="0 0 200 44" preserveAspectRatio="none" aria-label="Cumulative handover QoS rate over recent intervals. Solid PPO; dashed no reservation.">
+<svg id="qosSparkline" class="sparkline-svg" role="img" viewBox="0 0 200 44" preserveAspectRatio="none" aria-label="Cumulative handover QoS rate over recent intervals. Solid CARE; dashed no reservation.">
 <path id="qosSparkNormal" class="spark-line normal"/>
 <path id="qosSparkProposed" class="spark-line proposed"/>
 <line id="qosScrubLine" class="spark-scrub-line" y1="0" y2="44" hidden/>
 </svg>
-<span class="spark-scrub-tooltip" id="qosScrubTooltip">Solid PPO · dashed no reservation</span>
+<span class="spark-scrub-tooltip" id="qosScrubTooltip">Solid CARE · dashed no reservation</span>
 </div>
 </article>
 <article class="stat-card">
@@ -230,12 +240,12 @@
 <article>
 <span class="eyebrow">01 · FORECAST</span>
 <h3>Look a few intervals ahead.</h3>
-<p>A synthetic predictor projects motion and estimates a target, arrival interval, and RB demand. Its score is heuristic and can be wrong.</p>
+<p>A trained neural network forecasts each device's path and RB demand. A calibrated model turns the forecast into a probability that the predicted target cell is right; at 0.8 confidence it is right about 80% of the time.</p>
 </article>
 <article>
 <span class="eyebrow">02 · RESERVE</span>
 <h3>Hold capacity when it is useful.</h3>
-<p>The deep controller forecasts future position and PRB demand with a trained two-hidden-layer network, then applies a fixed reservation rule. QoS target selection considers signal, capacity and latency. The legacy linear PPO is available for comparison. Pending requests use no capacity; activation can be rejected.</p>
+<p>CARE, the proposed controller, is a learned policy that decides for every forecast device whether to hold RBs at the target, how many (the slice admission floor, the forecast demand or an upper quantile), and when to activate them. It is trained on each hold's own outcome: credit when the hold turned a failed admission into a success, a charge for every RB it withheld from devices already in that cell. Two fixed forecast rules remain selectable for comparison; one of them picks the target cell by load, signal and latency instead of distance.</p>
 </article>
 <article>
 <span class="eyebrow">03 · COMPARE</span>
@@ -272,9 +282,9 @@
 <p>Admission requires available ≥ slice minimum and a successful radio draw. QoS additionally requires available ≥ demand and modeled latency ≤ slice limit.</p>
 </article>
 <article>
-<h3>Training reward</h3>
-<p class="math-formula">reward = 2h + 3q − 1.5w − 0.25c</p>
-<p>h and q are interval handover admission and QoS fractions (zero with no crossing); w is settled unused RBs / network capacity; c is active held RBs / network capacity. Live playback uses the frozen policy and does not retrain it.</p>
+<h3>CARE contract reward</h3>
+<p class="math-formula">R = w<sub>s</sub>[(1+T)·d·rescued + 4·qos] − λ·displaced</p>
+<p>Each hold is scored on its own outcome. rescued = the arrival would have failed without the hold; T is the outage after a failed handover (3 intervals); d is the arrival's demand; w<sub>s</sub> weights slices (uRLLC 2, eMBB 1, mMTC 0.5); displaced counts RB-intervals the hold took from unmet incumbent demand, priced at λ = 1. Idle capacity costs nothing to hold. Live playback uses the frozen policy.</p>
 </article>
 </div>
 </details>
@@ -283,13 +293,13 @@
 <div>
 <p class="eyebrow">SEPARATE HELD-OUT EVALUATION</p>
 <h2>A demonstration, with measurable limits.</h2>
-<p>These small scenarios explain individual decisions. The separate benchmark uses 32 devices and 20 matched seeds. PPO improves on no reservation in that evaluation, while other heuristics achieve higher admission rates at higher reservation cost. This synthetic system-level model is not field validation.</p>
+<p>The small scenarios explain individual decisions. The paper evaluates CARE in the 32-device benchmark (also selectable above) on 20 held-out seeds never used for training or tuning, against seven baselines, including rules tuned on separate seeds. This synthetic system-level model is not field validation.</p>
 </div>
 <div class="benchmark">
 <small>BENCHMARK HANDOVER ADMISSION</small>
 <strong id="benchmarkStat">Loading…</strong>
-<span>PPO vs no reservation</span>
-<a href="/paper.tex" target="_blank" rel="noopener">Read manuscript ↗</a>
+<span id="benchmarkCaption">CARE vs no reservation</span>
+<a href="/paper.pdf" target="_blank" rel="noopener">Read the paper ↗</a>
 </div>
 </section>
 </main>

@@ -26,6 +26,8 @@ class Prediction:
     target_uncertainty: float
     demand_uncertainty: float
     actual_target_hint: int
+    features: tuple[float, ...] = ()
+    demand_upper: int = 0
 
 
 @dataclass
@@ -40,6 +42,8 @@ class Reservation:
     predicted_target: int
     active: bool = False
     activated_amount: int = 0
+    displaced: float = 0.0
+    timing: str = ""
 
 
 @dataclass
@@ -92,6 +96,11 @@ class RunMetrics:
     served_rbs_by_slice: list[int] = field(default_factory=lambda: [0, 0, 0])
     offered_rbs_by_ue: dict[int, int] = field(default_factory=dict)
     served_rbs_by_ue: dict[int, int] = field(default_factory=dict)
+    displaced_rb_intervals: float = 0.0
+    rescued_handovers: int = 0
+    qos_rescued_handovers: int = 0
+    outage_ue_intervals: int = 0
+    decisions: int = 0
 
     def __post_init__(self) -> None:
         self.latency_ms = [] if self.latency_ms is None else self.latency_ms
@@ -148,6 +157,11 @@ class RunMetrics:
                     "served_demand_fraction": self._ratio(self.served_rbs, self.offered_rbs),
                     "handovers_per_ue_second": self.handovers / (self.service_ue_intervals * dt_s),
                     "pingpong_fraction": self._ratio(self.pingpong_handovers, self.handovers),
+                    "displaced_rb_fraction": self._ratio(
+                        self.displaced_rb_intervals, self.capacity_rb_intervals
+                    ),
+                    "rescue_rate": self._ratio(self.rescued_handovers, self.handovers),
+                    "outage_fraction": self.outage_ue_intervals / self.service_ue_intervals,
                 }
             )
             for sid, name in enumerate(("embb", "urllc", "mmtc")):

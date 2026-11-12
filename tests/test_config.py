@@ -3,7 +3,7 @@ from dataclasses import replace
 import pytest
 
 from proran.actions import decode_action
-from proran.config import SimConfig, TrainConfig
+from proran.config import SimConfig
 
 
 @pytest.mark.parametrize(
@@ -51,27 +51,3 @@ def test_integer_rounding_preserves_action_bounds_even_for_one_rb():
                 assert 1 <= amount <= demand
                 assert 0 <= delay < arrival
     assert decode_action(0, 0, 0) == (0, 0)
-
-
-@pytest.mark.parametrize(
-    "changes",
-    [
-        {"gamma": 1.01},
-        {"gae_lambda": -0.1},
-        {"clip": 0},
-        {"clip": 1},
-        {"actor_lr": float("inf")},
-        {"critic_lr": 0},
-        {"entropy_coef": -0.1},
-        {"episodes": 0},
-        {"update_epochs": 0},
-        {"imitation_episodes": -1},
-    ],
-)
-def test_invalid_training_domains_are_rejected(changes):
-    with pytest.raises(ValueError):
-        TrainConfig(**changes)
-
-
-def test_discount_and_lambda_endpoints_and_no_imitation_are_legal():
-    assert TrainConfig(gamma=1, gae_lambda=0, imitation_episodes=0).gamma == 1

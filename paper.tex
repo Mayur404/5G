@@ -1,150 +1,236 @@
 \documentclass[journal]{IEEEtran}
-\usepackage{amsmath,amssymb,booktabs,graphicx,multirow,url}
+\usepackage{amsmath,amssymb,amsthm,booktabs,graphicx,url}
 \usepackage[hidelinks]{hyperref}
-\graphicspath{{results/figures/}}
-\input{results/results_macros.tex}
-\input{results/scenario_macros.tex}
+\graphicspath{{results/care/figures/}}
+\input{results/care/paper_macros.tex}
+\newtheorem{proposition}{Proposition}
 
-\title{Uncertainty-Aware Proactive Resource Reservation for Network-Sliced 5G RAN Handovers}
-\author{Reproducible Research Artifact}
+\title{CARE: Calibrated, Counterfactually Attributed Proactive Resource Reservation for Network-Sliced 5G Handovers}
+\author{Mayur%
+\thanks{Source code, trained models, raw per-seed results and every script used to produce the tables and figures are available at \url{https://github.com/Mayur404/5G}.}}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-Mobility can deliver a user equipment (UE) to a congested target cell before the scheduler can satisfy its slice service-level agreement (SLA). Reserving radio resource blocks (RBs) in advance can mitigate this risk, but inaccurate forecasts create waste and affect incumbent slices. We formulate reservation as a constrained sequential decision problem and evaluate a masked Proximal Policy Optimization (PPO) controller in a reproducible four-cell, three-slice simulator. A causal contract ledger enforces integer-RB capacity, activation, expiry, and wrong-target accounting, including simultaneous arrivals. The learned policy obtains \PPOQoS\% handover QoS satisfaction and \PPOHSR\% handover success at \PPOOccupancy\% reserved-RB occupancy, versus \NoResQoS\% and \NoResHSR\% without reservation; paired 95\% intervals exclude zero for both gains over no reservation. However, the uncertainty-aware heuristic exceeds PPO in handover success, and certainty-equivalent reservation exceeds both at a larger RB footprint. These synthetic results demonstrate a reliability--resource trade-off, not learned-policy dominance or field-network performance. Source code, tests, raw metrics, figures, and a live showcase accompany the paper.
+Holding resource blocks (RBs) at a target cell before a device arrives protects sliced 5G handovers, but every held RB is withheld from the devices already in that cell. We present CARE, a reservation controller that makes this trade explicit. CARE calibrates the probability that a learned mobility forecast names the right target cell. It credits each reservation only when a one-interval counterfactual shows that it turned a failed admission into a successful one, and charges it for exactly the incumbent RBs it displaced, at an operator-chosen price $\lambda$. It learns per device whether to wait or hold, how much (slice floor, forecast demand or an upper quantile) and when, by fitted Q iteration with optimal-stopping targets and a three-network Q-ensemble. In a synthetic system-level simulator with three slices, evaluated on 20 held-out matched seeds against seven baselines with Holm-corrected paired tests, CARE raises handover admission from \NoResHSR\% to \CareHSR\% and cuts outage from \NoResOutage\% to \CareOutage\% of UE-intervals. As the price rises from $0.25$ to $16$, CARE lowers its holding from \LamQuarterCareHold\% to \LamSixteenCareHold\% of decisions. Calibration alone is worth \VsCareUncalHSRDiff{} points of admission. A calibrated threshold rule tuned on separate seeds is, however, as good or slightly better at every price: CARE's net utility is within $0.6$ RB per interval of the best rule and never above it. We also show that a natural policy-gradient formulation of the same problem collapses to holding on every forecast, and explain why.
 \end{abstract}
 
 \begin{IEEEkeywords}
-5G, handover, network slicing, proactive reservation, prediction uncertainty, PPO, radio access network.
+5G, network slicing, handover, proactive resource reservation, admission control, uncertainty calibration, reinforcement learning, counterfactual credit assignment.
 \end{IEEEkeywords}
 
 \section{Introduction}
-Network slicing multiplexes heterogeneous services over a shared radio access network (RAN).  eMBB seeks throughput, uRLLC emphasizes latency and reliability, and mMTC supports many modest-rate devices.  Mobility couples these requirements to a difficult admission-control problem: resources available in a serving cell say little about capacity at the target when handover completes.  Purely reactive control can be late, whereas blindly trusting a forecast reserves scarce capacity at the wrong cell or for too long.
+Network slicing lets one radio access network (RAN) serve enhanced mobile broadband (eMBB), ultra-reliable low-latency (uRLLC) and massive machine-type (mMTC) traffic with different service objectives~\cite{foukas2017slicing,afolabi2018slicing,3gpp28541}. Mobility couples these slices: a device that crosses into a loaded cell must be admitted with at least its slice's minimum resource-block (RB) allocation, or the handover fails and the device spends several intervals re-establishing its radio link~\cite{3gpp38300}. Holding capacity at the target cell before the device arrives is an old remedy, dating back to guard channels~\cite{hong1986guard} and shadow-cluster and predictive bandwidth reservation~\cite{levine1997shadow,choi1998predictive}. Learned mobility and demand forecasting renewed interest in it for sliced 5G RANs~\cite{wu2026prens,li2020mobility,bega2020deepcog,gharehgoli2023uncertainty}.
 
-PreNS combines attention-based bidirectional LSTM demand prediction with DDQN allocation and motivates confidence-aware predictive/reactive control~\cite{wu2026prens}.  Its published study, however, abstracts mobility and performs slice-level allocation rather than per-UE handover reservation.  Moreover, its printed confidence term has inverse-resource units while its variability term has squared metric units; adding them does not produce a dimensionally meaningful fusion weight.  We therefore retain the useful architectural premise but do not reproduce that fusion.
+Proactive reservation has a hidden cost. Capacity held for an arriving device is withheld from the devices already in the cell. When the cell is idle that costs nothing. When it is contested, the hold displaces incumbent service, and the hold only pays off if the arrival would otherwise have failed. Three questions decide whether a hold is worth placing: is the forecast target right, is the target cell going to be short of capacity at arrival, and does the slice of the arriving device justify the displacement it causes. Forecast-then-reserve pipelines usually treat the forecast as certain and reward handover success, which pushes a learned controller toward holding too much, too early.
 
-Related work addresses adjacent decisions: DeepCog forecasts cost-aware slice capacity~\cite{bega2020deepcog}; Li \emph{et al.} combine LSTM and advantage actor--critic for mobility-aware inter-slice allocation~\cite{li2020mobility}; and Gharehgoli \emph{et al.} study demand and channel-state uncertainty in end-to-end slicing~\cite{gharehgoli2023uncertainty}. Here the decision is instead a per-UE, target-cell RB hold with explicit timing, admission, consumption, and expiry. The comparison is methodological; our synthetic simulator does not reproduce those systems' evaluation settings.
+This paper presents \emph{CARE} (Calibrated, Attribution-Rewarded rEservation), a controller that addresses each question explicitly:
+\begin{enumerate}
+\item \textbf{Calibrated target confidence.} A logistic model maps observable forecast descriptors to the probability that the forecast target is the cell the device actually enters next. On held-out trajectories it reaches a Brier score of \CalBrier{} (versus \ConstBrier{} for the forecaster's constant score) and an expected calibration error of \CalECE{}.
+\item \textbf{Per-contract counterfactual credit.} Each hold is rewarded only when the simulator's one-interval counterfactual shows that it turned a failed admission into a successful one, and it is charged for exactly the incumbent RB-intervals it displaced. The displacement price $\lambda$ is an operator parameter.
+\item \textbf{Reservation as optimal stopping.} For every forecast device and interval, CARE chooses to wait or to commit a hold of the slice admission floor, the forecast demand or an upper demand quantile, activated now, at mid-lead or just in time. It learns these choices by fitted Q iteration whose wait targets are floored at the value of never holding, and acts on the mean of three independently trained Q-networks. We show that the natural policy-gradient formulation collapses to holding on every forecast.
+\end{enumerate}
+The evaluation uses seed partitions that are disjoint by role, baselines tuned on their own seeds, paired tests with Holm correction over a predeclared family, and the full set of trade-off metrics, including displacement. On 20 held-out seeds, CARE raises handover admission from \NoResHSR\% to \CareHSR\% and adapts to the displacement price, holding on \LamQuarterCareHold\% of decisions at $\lambda=0.25$ and \LamSixteenCareHold\% at $\lambda=16$. Removing calibration costs \VsCareUncalHSRDiff{} points of admission. CARE does \emph{not}, however, beat a calibrated threshold rule tuned on separate seeds: its utility is within $0.6$ RB per interval of the best tuned rule at every price, and slightly below it. We report this as a finding, together with a diagnosis of why the natural policy-gradient formulation collapses to holding on every forecast.
 
-This work contributes: (i) an explicit target/time/demand prediction contract; (ii) a causal integer-RB reservation ledger with wrong-target, early/late arrival, and activation-rejection semantics; (iii) a masked categorical PPO controller based on the clipped objective~\cite{schulman2017ppo} and generalized advantage estimation (GAE)~\cite{schulman2016gae}; and (iv) a reproducible evaluation with matched random traces, deterministic baselines, uncertainty sweeps, publication-quality plots, and a live simulator.
+All results come from a synthetic system-level simulator in which radio, signaling and packet scheduling are abstracted. They show behavior under stated assumptions, not field performance or 3GPP conformance.
 
-\section{System Model}
-Let $i\in\mathcal U$, $j\in\mathcal C$, and $s(i)\in\{\mathrm{eMBB},\mathrm{uRLLC},\mathrm{mMTC}\}$ denote a UE, cell, and slice.  All RB counts refer to the same interval of duration $\Delta$.  Cell $j$ has integer capacity $K_j$, incumbent allocation $A_{j,t}$, and active per-UE reservations $B_{i,j,t}$.  The fundamental invariant is
-\begin{equation}
-A_{j,t}+\sum_i B_{i,j,t}\le K_j, \qquad
-F_{j,t}=K_j-A_{j,t}-\sum_iB_{i,j,t}\ge0. \label{eq:capacity}
-\end{equation}
-The simulator uses strict-priority admission (uRLLC, eMBB, mMTC) only to produce a controlled congestion process; it does not claim to model a production NR scheduler.  Each UE has minimum $d_i^{\rm SLA}$ RBs and slice latency bound $L_{s(i)}^{\max}$.  SLA satisfaction is evaluated after handover and never asserted when the physical capacity is infeasible.
+\section{Related Work}
+\textbf{Handover reservation.} Guard channels set aside fixed capacity for handovers~\cite{hong1986guard}. Shadow clusters and predictive schemes size reservations from mobility estimates~\cite{levine1997shadow,choi1998predictive}. These schemes assume one service class and do not charge for the capacity they withhold.
 
-At decision time, projected kinematics select one candidate target $j$ within horizon $H$. The synthetic forecaster exposes a heuristic score $p_{i,j,t}\in[0,1]$, relative arrival lead $\hat h_{i,j,t}\in\{1,\ldots,H\}$, and estimated RB demand $\hat D_{i,j,t}$. The score is an input to the controller, not a calibrated conditional probability or a multi-target distribution. Forecast perturbations generate reproducible nonstationary errors. The state separately includes a configured target-noise rate $u^T\in[0,1]$ and capacity-normalized deviation from the currently observed demand $u^D\ge0$. Neither is evidence of a fitted uncertainty estimator.
+\textbf{Learning for sliced RANs.} DeepCog forecasts slice capacity with a cost-aware loss~\cite{bega2020deepcog}. LSTM-assisted actor-critic learning allocates slice resources under user mobility~\cite{li2020mobility}. Robust allocation under demand and channel uncertainty is studied in~\cite{gharehgoli2023uncertainty}. PreNS combines prediction with real-time allocation for RAN slicing~\cite{wu2026prens}. CARE differs from these in where it applies learning: it decides per-device reservation contracts, and it learns from counterfactual credit rather than network-level reward.
 
-\section{Reservation MDP}
-An action is $a_t=(b_t,q_t,d_t)$, where $b_t$ selects reservation, $q_t$ is an integer amount, and $d_t$ is activation delay.  Positive actions obey
-\begin{equation}
-1\le q_t\le\hat D_{i,j,t},\qquad 0\le d_t\le\hat h_{i,j,t}. \label{eq:action}
-\end{equation}
-The implementation enumerates no-op plus half/full demand at immediate, midpoint, and just-in-time activation.  A deterministic mask removes actions violating (\ref{eq:action}) or known commitments; no-op is always legal.  Runtime activation rechecks (\ref{eq:capacity}).  A contract remains active until the first next handover or expiry $t+H$.  Early arrival cannot use an inactive promise; wrong-target and expired active contracts count as unused.
+\textbf{Calibration and credit assignment.} Post-hoc calibration~\cite{platt1999probabilistic,guo2017calibration} and proper scoring rules~\cite{brier1950verification} are standard in machine learning but rare in RAN reservation. Counterfactual baselines for credit assignment come from multi-agent reinforcement learning~\cite{foerster2018coma}. CARE learns action values by fitted Q iteration~\cite{sutton2018rl} and is compared against proximal policy optimization~\cite{schulman2017ppo}.
 
-For a realized handover with demand $D_i$, matching held reservation $B_i^{-}$ and free RBs $F_i^{-}$, serviceable capacity and used reservation are
-\begin{equation}
-X_i=\min(D_i,B_i^{-}+F_i^{-}),\qquad
-U_i=Y_i^{\rm HO}\min(D_i,B_i^{-}), \label{eq:handover}
-\end{equation}
-where $Y_i^{\rm HO}$ is the observed success flag.  This prevents a failed or wrong-target handover from retroactively ``using'' reserved RBs.
+\section{System Model}\label{sec:model}
+\subsection{Network, traffic and mobility}
+Time advances in intervals of $\Delta t=100$\,ms. $N=32$ devices (UEs) move in a $100\times100$ square with four sites at $(25,25)$, $(75,25)$, $(25,75)$ and $(75,75)$. Each cell has $C=60$ RBs. Velocities follow a Gaussian random walk ($\sigma=0.1$ per interval, speed capped at 4 units per interval) with reflecting walls. Each UE belongs to one slice $s$ for the whole run. Its per-interval demand $d$ is a rounded Gaussian (at least one RB) with the slice deviation. The mean is the slice mean modulated by a common $\pm16\%$ load cycle with a period of 47 intervals, and a uRLLC burst, occurring with probability $0.08$ per interval, multiplies it by $1.55$. Table~\ref{tab:slices} lists the slice profiles. A UE is served by its nearest site, and a cell change happens when the nearest site changes.
 
-The normalized interval reward is
-\begin{equation}
-r_t=\alpha h_t+\beta q_t^{\rm QoS}-\gamma\frac{W_t}{\sum_jK_j}
--\delta\frac{\sum_{i,j}B_{i,j,t}}{\sum_jK_j}, \label{eq:reward}
-\end{equation}
-where $h_t$ and $q_t^{\rm QoS}$ are event success fractions, and $W_t$ is unused activated RBs resolved in the interval.  We use $(\alpha,\beta,\gamma,\delta)=(2,3,1.5,0.25)$.
-
-The state contains forecast score $p$, normalized time-to-handover, predicted demand and free RBs, target load, $u^T$, $u^D$, one-hot slice, normalized SLA RBs/latency, speed, and bias. For legal action set $\mathcal A(s)$, the masked policy is
-\begin{equation}
-\pi_\theta(a|s)=\frac{\exp \ell_\theta(s,a)}{\sum_{a'\in\mathcal A(s)}\exp\ell_\theta(s,a')},\quad a\in\mathcal A(s), \label{eq:masked}
-\end{equation}
-and zero otherwise.  The saved rollout mask is reused during updates.  With TD residual $\delta_t^{V}=r_t+\gamma_{\rm RL}(1-d_t)V(s_{t+1})-V(s_t)$, GAE computes $\hat A_t=\sum_{k\ge0}(\gamma_{\rm RL}\lambda)^k\delta_{t+k}^{V}$ up to termination.  PPO maximizes the standard clipped likelihood-ratio surrogate~\cite{schulman2017ppo}.  A linear actor/critic is deliberately used: it is inspectable, sufficient for the normalized state, and makes the artifact runnable on a CPU without a deep-learning framework.
-
-\section{Experimental Method}
-The simulated $100\times100$~m area contains four nearest-cell regions, 32 moving UEs, and 60 RBs per cell. Velocities undergo bounded Gaussian perturbations; traffic has a shared periodic component, slice-specific Gaussian demand, and bursty uRLLC demand. The horizon is eight 100-ms intervals. Mean demands are 10.5, 7.0, and 3.2 RBs; SLA floors are 7, 5, and 2 RBs for eMBB, uRLLC, and mMTC. These are declared simulation assumptions, not 3GPP-calibrated deployment values.
-
-The actor is first behavior-cloned~\cite{pomerleau1989alvinn} from the uncertainty-aware heuristic on 12 independent episodes. No-op examples are capped at twice the positive reservation examples. After 45 categorical-likelihood epochs, PPO fine-tunes for 60 episodes of 180 intervals with $\gamma_{\rm RL}=0.985$, $\lambda=0.95$, clip 0.2, six epochs per rollout, and fixed seed 41. Evaluation uses 20 disjoint seeds, 320 intervals each. Every method receives identically seeded mobility, traffic, and radio random streams. Baselines are: no reservation; reactive full reservation one interval before forecast arrival; certainty-equivalent immediate full reservation above score 0.42; the uncertainty-aware teacher; and a privileged projection reference that knows whether the noisy target equals the unperturbed kinematic projection. The reference does not know realized future mobility or congestion and is not an achievable operational method.
-
-Metrics follow RB-consistent denominators: handover success rate (HSR), QoS satisfaction, unused activated-RB fraction, time-average reservation occupancy, incumbent block rate, and modeled event-latency CDFs separated by slice. The latency proxy includes both successful and failed attempts; QoS satisfaction requires a successful handover, full demand, and a latency below the slice bound. Undefined denominators are reported as such; no reservation therefore has no waste percentage. Because every method uses the same 20 seeds, controller differences are analyzed per seed with two-sided 95\% paired $t$ intervals ($t_{0.975,19}=2.093$).
-
-\section{Results}
 \begin{table}[t]
 \centering
-\caption{Matched-seed test performance (20 runs). Percent except latency.}
-\label{tab:main}
-\resizebox{\columnwidth}{!}{%
+\caption{Slice profiles. The admission floor is capped by the UE's demand.}
+\label{tab:slices}
 \begin{tabular}{lrrrrr}
 \toprule
-Method & HSR & QoS & Waste & Occup. & Mean ms\\
+Slice & Mean $d$ & Std & Floor $f_s$ & Latency & Priority\\
 \midrule
-No reservation & \NoResHSR & \NoResQoS & -- & \NoResOccupancy & \NoResLatency\\
-Reactive & \ReactiveHSR & \ReactiveQoS & \ReactiveWaste & \ReactiveOccupancy & \ReactiveLatency\\
-Certainty-equivalent & \CertaintyHSR & \CertaintyQoS & \CertaintyWaste & \CertaintyOccupancy & \CertaintyLatency\\
-Uncertainty-aware & \AwareHSR & \AwareQoS & \AwareWaste & \AwareOccupancy & \AwareLatency\\
-Projection reference & \OracleHSR & \OracleQoS & \OracleWaste & \OracleOccupancy & \OracleLatency\\
-PPO (proposed) & \PPOHSR & \PPOQoS & \PPOWaste & \PPOOccupancy & \PPOLatency\\
-\bottomrule
-\end{tabular}}
-\end{table}
-
-\begin{table}[t]
-\centering
-\caption{Per-slice handover QoS satisfaction (\%); mean across 20 test seeds.}
-\label{tab:slices}
-\begin{tabular}{lrr}
-\toprule
-Slice & No reservation & PPO\\
-\midrule
-eMBB & \NoResEMBBQoS & \PPOEMBBQoS\\
-uRLLC & \NoResURLLCQoS & \PPOURLLCQoS\\
-mMTC & \NoResMMTCQoS & \PPOMMTCQoS\\
+eMBB & 10.5 & 3.0 & 7 & 20\,ms & 2\\
+uRLLC & 7.0 & 2.0 & 5 & 5\,ms & 3\\
+mMTC & 3.2 & 1.2 & 2 & 100\,ms & 1\\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Table~\ref{tab:main} shows PPO at \PPOQoS\% QoS and \PPOHSR\% HSR, compared with \NoResQoS\% and \NoResHSR\% without reservation. The paired PPO-minus-baseline differences are \NoResQoSDiff\ percentage points QoS (95\% CI $[\NoResQoSCILow,\NoResQoSCIHigh]$) and \NoResHSRDiff\ points HSR (CI $[\NoResHSRCILow,\NoResHSRCIHigh]$). Relative to the uncertainty-aware heuristic, the differences are \AwareHSRDiff\ points HSR (CI $[\AwareHSRCILow,\AwareHSRCIHigh]$) and \AwareQoSDiff\ points QoS (CI $[\AwareQoSCILow,\AwareQoSCIHigh]$). PPO uses less reservation occupancy (\PPOOccupancy\% versus \AwareOccupancy\%) but has slightly more unused activated RBs (\PPOWaste\% versus \AwareWaste\%). Certainty-equivalent reservation reaches \CertaintyHSR\% HSR at \CertaintyOccupancy\% occupancy, while the privileged projection reference reaches \OracleHSR\%. Blocking is \PPOBlock\% for PPO versus \NoResBlock\% without reservation. Thus PPO improves the no-reservation outcome but does not dominate simpler policies.
+\subsection{Scheduling, admission and outage}
+In each interval, every cell serves its connected incumbents in strict slice priority order (uRLLC, eMBB, mMTC; ties broken by UE identifier). The budget is capacity minus active holds. A hold therefore displaces incumbent service exactly when the cell has unmet incumbent demand $u_c$. The displacement charged to the holds at cell $c$ is $\min(h_c,u_c)$ RB-intervals, apportioned in proportion to each hold's size. Under this memoryless scheduler, that is precisely the extra service incumbents would have received without the holds.
 
-Table~\ref{tab:slices} exposes eMBB, uRLLC, and mMTC handover QoS outcomes separately. PPO improves the latter two but slightly reduces eMBB QoS on this test suite. The priority scheduler differentiates admission order, but these rates are measured outcomes under shared finite capacity, not a proof of hard slice isolation.
+A handover of a UE with demand $d$ and slice floor $f=\min(f_s,d)$ into cell $c$ can use its own active holds at $c$ ($m$ RBs) plus the cell's free RBs $F_c$. It is \emph{admitted} if $\min(d,m+F_c)\ge f$ and a radio draw succeeds with probability $0.99$. It meets \emph{QoS} if it is admitted, receives its full demand, and its modeled latency
+\begin{equation}
+\ell=\ell_s\left(1+0.75\,\rho_c^2+3\left(1-\tfrac{\min(d,m+F_c)}{d}\right)\right)
+\end{equation}
+is within the slice limit, where $\ell_s\in\{8,2,22\}$\,ms is the slice base latency and $\rho_c$ the cell load. A failed admission disconnects the UE for $T=3$ intervals. During that outage it receives no RBs and cannot make a prepared handover.
+
+\subsection{Reservation contracts}
+A hold (contract) names a UE, a target cell, an amount and an activation interval. The request needs one interval of preparation before activation. Pending contracts use no capacity. At activation, a hold may claim only capacity that is not needed for the admission floors of the target cell's connected incumbents (capacity minus active holds minus the sum of those floors). Otherwise the activation is rejected. Under this \emph{floor-protected} rule, a hold never activates into capacity that incumbents need to keep their floors at that moment. While a contract is pending, its activation instant is re-anchored to the newest forecast of the same target, but the target itself never changes. A contract ends when its UE arrives (settled if the target is right, wrong-target otherwise), when it expires at the forecast horizon, or when it is censored at the end of the run.
+
+\subsection{Forecasting}
+A two-hidden-layer perceptron (35--64--32--24, tanh) forecasts each UE's next eight positions and demands from six frames of history. It predicts residuals over a constant-velocity projection and is trained, validated and tested on disjoint trajectory seeds. Applying the cell-selection rule along the forecast path gives the forecast target cell and lead $k\in\{1,\dots,8\}$ intervals.
+
+\section{CARE}\label{sec:care}
+\subsection{Calibrated target confidence}
+The forecaster returns trajectories, not probabilities. CARE estimates $p=\Pr(\text{next cell change goes to the forecast target})$ by logistic regression on seven observable descriptors: lead, signal margin between target and serving cell, serving signal, speed, heading toward the target, distance gap to the cell bisector, and closing speed. The basis is extended with two interaction terms (lead $\times$ signal margin, bisector gap $\times$ closing speed), the squared lead and an intercept. The model is fit by ridge-penalized Newton iterations ($\ell_2=10^{-3}$) on \CalFitExamples{} forecasts from 20 dedicated calibration seeds and scored on \CalTestExamples{} forecasts from the 20 test seeds. The observed target accuracy is \CalAccLeadOne\% at a one-interval lead and \CalAccLeadEight\% at eight intervals. A single constant score cannot represent that spread.
+
+\subsection{Decision process}
+In every interval, each connected UE without a contract whose forecast predicts a cell change is a decision point, up to 32 per interval. The policy observes 17 causal features: calibrated confidence, normalized lead, forecast demand, admission floor, free and floor-protected claimable RBs at the target, the target's incumbent allocation, unmet demand and active holds, the slice one-hot, signal margin, speed, outage length, current demand and a bias. It never observes the counterfactual quantities used for credit. The action space is
+\begin{equation}
+\mathcal{A}=\{\textsc{wait}\}\cup\{\text{floor},\text{demand},\text{upper}\}\times\{\text{now},\text{mid},\text{jit}\},
+\end{equation}
+where \emph{upper} is the forecast demand plus one slice standard deviation, and activation happens immediately, at half the lead, or one interval before the forecast arrival. Actions whose amount exceeds the target capacity not already committed to active or pending holds are masked.
+
+\subsection{Counterfactual contract reward}
+When a contract's UE arrives, the simulator also evaluates the same admission with that UE's matching holds removed. In that counterfactual, the freed RBs first go to unmet incumbents, as the scheduler would allocate them. The contract is \emph{rescued} if the actual admission succeeded and the counterfactual one failed; \emph{QoS-rescued} is defined in the same way for QoS. The contract reward is
+\begin{equation}\label{eq:reward}
+R=w_s\Big[(1+T)\,d\,\mathbb{1}_{\text{rescued}}+q\,\mathbb{1}_{\text{QoS-rescued}}\Big]-\lambda\,D,
+\end{equation}
+where $(1+T)\,d$ is the service a failed arrival would lose (the arrival interval plus $T$ outage intervals), $q=4$, $D$ is the contract's displaced RB-intervals, and $w_s=(1,2,0.5)$ for (eMBB, uRLLC, mMTC). A hold in an idle cell has $R=0$: it neither rescues nor displaces. A \textsc{wait} receives $0.98$ times the return of the same UE's next decision for the same crossing. The policy can therefore learn to defer until the forecast sharpens. The network-level \emph{utility} at price $\lambda$ is the sum of~\eqref{eq:reward} over all contracts, per interval, in RB units. It is the primary metric.
+
+\begin{proposition}
+Under the memoryless priority scheduler, the displacement charged by~\eqref{eq:reward}, summed over all contracts in an interval, equals the extra RBs that incumbents would have received in that interval if every active hold were removed.
+\end{proposition}
+\begin{proof}
+At cell $c$ with active holds $h_c$, removing the holds raises the budget by $h_c$. The priority scheduler hands those RBs to unmet incumbents until either the $h_c$ RBs or the unmet demand $u_c$ run out, so incumbents gain $\min(h_c,u_c)$ RBs. The simulator charges exactly this amount, split among the holds at $c$ in proportion to their sizes.
+\end{proof}
+
+\subsection{Learning: fitted Q with optimal stopping}
+Holding is a stopping decision. At every interval before the crossing, the controller either commits a contract now or waits, and a UE that never gets a contract has reward exactly $0$ under~\eqref{eq:reward}. CARE therefore learns action values $Q(s,a)$ with a multilayer perceptron (17--64--64--10, tanh, NumPy) by fitted Q iteration~\cite{sutton2018rl} with the targets
+\begin{equation}\label{eq:targets}
+y=\begin{cases}R & \text{hold},\\ \gamma\max\big(0,\max_{a'}Q(s',a')\big) & \text{wait, $s'$ exists},\\ 0 & \text{wait, no $s'$},\end{cases}
+\end{equation}
+where $s'$ is the same UE's decision state in the next interval and $\gamma=0.98$. A committed contract's target is its realized counterfactual reward, so it does not depend on the behavior policy and every transition can be reused. Data come from an $\epsilon$-greedy behavior policy annealed from uniform over legal actions to $\epsilon=0.05$ over the first 75\% of 240 training episodes of 320 intervals. Every four episodes, CARE recomputes the targets twice from the frozen network and fits six epochs of minibatch (512) squared error with Adam~\cite{kingma2015adam} at $10^{-3}$. For each price $\lambda\in\{0.25,1,4,16\}$, three replicas are trained from different initializations and trajectory seeds. At run time, CARE acts greedily on the replicas' \emph{mean} action values. A greedy maximum over nine noisy hold values favors whichever is overestimated, and averaging independent replicas reduces that variance.
+
+\textbf{Why not policy gradients.} We first trained CARE's actor with PPO~\cite{schulman2017ppo} on per-decision Monte Carlo returns, with clip $0.2$ and an entropy bonus annealed from $10^{-2}$ to $10^{-3}$. In that formulation a wait inherits the return of the UE's next \emph{sampled} decision. Because the behavior policy almost always holds at that next decision, waiting and holding receive nearly the same return. There is no gradient toward waiting, and the policy collapses to holding on every forecast, whatever the price. Flooring the sampled continuation at $0$ fixes the collapse but overestimates waiting, because a single lucky rescue dominates the sampled maximum. Both PPO variants are reported as ablations (\emph{CARE-PPO w/ on-policy wait} and \emph{CARE-PPO}).
+
+\section{Experimental Protocol}\label{sec:protocol}
+\textbf{Seed partitions.} Forecaster training uses seeds 3000--3023 and validation 4000--4005. Calibration uses 4100--4119, CARE training 20000 onward, rule tuning and replica selection 5000--5009, and the held-out test set 9000--9019. Every test run is 320 intervals (32\,s) of 32 UEs. All methods on a seed share mobility, traffic, forecast and radio random streams, so differences between methods are paired.
+
+\textbf{Baselines.} All methods use the same forecaster, calibrated confidence and contract mechanics:
+\emph{No reservation};
+\emph{Reactive} (hold forecast demand immediately, but only once the lead is within the preparation delay plus one interval);
+\emph{Certainty-equivalent} (hold forecast demand immediately for every forecast);
+\emph{Fixed proactive} (forecast demand at mid-lead when $p\ge0.5$);
+\emph{Floor-JIT} (the admission floor, just in time, for every forecast);
+\emph{Tuned rule}, the best of 45 (amount, timing, threshold $\tau$) rules on the tuning seeds at each $\lambda$; and
+\emph{Slice-tuned rule}, a separately tuned rule per slice, where a slice gets no rule if none has positive utility.
+
+\textbf{Ablations.} \emph{CARE w/o calibration} is trained and run with the forecaster's constant score in place of calibrated confidence. \emph{CARE single network} uses the single replica with the best tuning-seed utility instead of the ensemble. \emph{CARE-PPO} and \emph{CARE-PPO w/ on-policy wait} replace the learner as described in Section~\ref{sec:care}; they use the best replica on the tuning seeds. Three mechanism ablations rerun Floor-JIT without retiming, with free (unprotected) activation, and with one decision per interval. A legacy run uses the earlier contract mechanics: unprotected activation, no retiming, no preparation delay and one decision per interval (outage and floor capping as in the main setting).
+
+\textbf{Disclosure of method revision.} The learner was revised after a first held-out evaluation. In that evaluation, the PPO actor was identical to Floor-JIT on every test seed, which exposed the collapse described in Section~\ref{sec:care}. Every subsequent design choice (the stopping backup, fitted Q, the ensemble) was made on the tuning seeds only, and the final pipeline was rerun end to end. The test seeds were never used to tune any parameter, but they were seen once before the final method was fixed.
+
+\textbf{Statistics.} Tables report means over the 20 test seeds with 95\% Student-$t$ half-widths. Comparisons are paired by seed. Two-sided $p$-values come from a sign-flip randomization test (200{,}000 draws), Holm-adjusted~\cite{holm1979simple} over the predeclared family: CARE against each of the seven baselines and each of its four ablations, on utility $U_1$, handover admission rate (HSR), outage fraction and whole-network full-service rate (44 tests). Comparisons at the other prices form a second Holm family.
+
+\section{Results}\label{sec:results}
+\subsection{Calibration}
+Fig.~\ref{fig:calibration} shows that the calibrated confidence tracks observed target accuracy across the whole range. The Brier score is \CalBrier{} against \ConstBrier{} for the constant score, the expected calibration error is \CalECE{} against \ConstECE{}, and the AUC is \CalAUC{}. Target accuracy falls from \CalAccLeadOne\% at a one-interval lead to \CalAccLeadEight\% at eight intervals. The base rate is \CalBaseRate\%, so a constant score is right on average but uninformative about \emph{which} forecasts to trust.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\columnwidth]{learning_stages.pdf}
-\caption{Two-stage learning: balanced behavior-cloning initialization followed by PPO reinforcement fine-tuning.}
-\label{fig:training}
+\includegraphics[width=\columnwidth]{calibration.pdf}
+\caption{Left: reliability of calibrated target confidence on the 20 test seeds (bins with at least 20 forecasts). Right: observed target accuracy and mean calibrated confidence by forecast lead.}
+\label{fig:calibration}
 \end{figure}
 
-Figure~\ref{fig:training} records the actual PPO optimization trace; a separate behavior-cloning loss is retained in the artifact. Figure~\ref{fig:pareto} sweeps a deterministic reliability threshold and overlays learned and baseline policies. PPO occupies less RB-time than the teacher but loses HSR and QoS; certainty-equivalent reservation yields higher HSR and QoS at higher occupancy. The full frontier prevents a single favorable metric from hiding this trade-off.
+\subsection{Main comparison at \texorpdfstring{$\lambda=1$}{lambda = 1}}
+Table~\ref{tab:main} and Fig.~\ref{fig:tradeoff} summarize the 20 test seeds. Reservation of any kind matters most. Without it, only \NoResHSR\% of handovers are admitted and UEs spend \NoResOutage\% of UE-intervals in outage. CARE admits \CareHSR\% with \CareOutage\% outage, displacing \CareDisplaced\% of capacity from incumbents. Holding forecast demand for every forecast (Certainty-equivalent) also raises admission, to \CertaintyHSR\%. It displaces \CertaintyDisplaced\% of capacity, however, cuts whole-network full service from \NoResFull\% to \CertaintyFull\%, and its net utility is \CertaintyUtility{} RB per interval: the rescued arrivals are entirely paid for by displaced incumbents.
 
-An exploratory, post-training stress audit applies the saved PPO actor to four frozen workloads on eight matched seeds each, with 240 intervals per seed. These workloads are independent of the six-device educational web traces. Mean PPO-minus-no-reservation HSR differences are $\UrbanHSRGain$, $\RushHSRGain$, $\HighwayHSRGain$, and $\URLLCHSRGain$ percentage points for urban, rush-hour, highway, and elevated-uRLLC-burst settings, respectively; the corresponding QoS differences are $\UrbanQoSGain$, $\RushQoSGain$, $\HighwayQoSGain$, and $\URLLCQoSGain$ points. The workloads alter UE density, capacity, speed, or burst rate, but do not change the underlying mobility or radio abstraction. These small-sample checks are directional robustness evidence, not deployment validation or a model-selection set. Per-seed values are supplied in \texttt{scenario\_audit.csv}.
+Against the earlier baselines, CARE is better on every primary metric. Its utility exceeds Reactive by \VsReactiveUtilDiff{} RB per interval (95\% CI $[\VsReactiveUtilLow,\VsReactiveUtilHigh]$, Holm $p=\VsReactiveUtilP$, 20/20 seeds) and its admission rate by \VsReactiveHSRDiff{} points. Its utility exceeds Fixed proactive by \VsFixedUtilDiff{} ($p=\VsFixedUtilP$).
 
-\begin{figure}[t]
+\textbf{CARE does not outperform the simple rules built on the same ingredients.} Floor-JIT and the two tuned rules reach $U_1$ of \FloorJITUtility{}, \TunedUtility{} and \SliceTunedUtility{}, against \CareUtility{} for CARE. The paired differences are small and negative: \VsFloorJITUtilDiff{} $[\VsFloorJITUtilLow,\VsFloorJITUtilHigh]$, \VsTunedUtilDiff{} $[\VsTunedUtilLow,\VsTunedUtilHigh]$ and \VsSliceTunedUtilDiff{} $[\VsSliceTunedUtilLow,\VsSliceTunedUtilHigh]$. After Holm correction over the 44-test family they are not significant ($p=\VsFloorJITUtilP$, \VsTunedUtilP, \VsSliceTunedUtilP). CARE's whole-network full-service rate is lower by less than a tenth of a point ($\VsSliceTunedFullDiff$ points against the slice-tuned rule, $p=\VsSliceTunedFullP$). Differences in admission and outage are not significant. In short, CARE learns a policy whose network outcome is statistically indistinguishable from, and at worst marginally below, a calibrated threshold rule tuned on separate seeds.
+
+All admission-oriented controllers trade QoS for admission. Floor holds admit an arrival at its slice minimum, not its full demand, so CARE's handover QoS rate (\CareQoS\%) is below Reactive's (\ReactiveQoS\%), which holds full demand. Its uRLLC QoS rate is \CareURLLCQoS\% against \ReactiveURLLCQoS\% for Reactive. Utility~\eqref{eq:reward} values QoS rescues at $q=4$ RBs, far less than an admission rescue ($(1+T)\,d=42$ RBs for a mean eMBB arrival), so every utility-maximizing policy here prefers the floor. An operator who values full-demand handovers more would raise $q$.
+
+\begin{table*}[t]
 \centering
-\includegraphics[width=.95\columnwidth]{qos_resource_pareto.pdf}
-\caption{Handover QoS versus time-average reserved-RB occupancy.}
-\label{fig:pareto}
-\end{figure}
+\caption{Held-out results at $\lambda=1$: means over 20 test seeds (32 UEs, 320 intervals). HSR: handover admission rate; QoS: handover QoS rate; Outage: share of UE-intervals in re-establishment; Full: share of UE-intervals receiving full demand (whole network); Served: served share of offered RBs; Displ.: incumbent RB-intervals displaced by holds (\% of capacity); $U_1$: net utility per interval in slice-weighted RBs. Ablations below the line.}
+\label{tab:main}
+\input{results/care/main_table.tex}
+\end{table*}
 
 \begin{figure*}[t]
 \centering
-\includegraphics[width=.92\textwidth]{slice_latency_cdf.pdf}
-\caption{Modeled latency CDF by slice for no reservation and PPO; dotted vertical lines show each slice's configured latency bound. All attempted handovers are included.}
-\label{fig:cdf}
+\includegraphics[width=0.82\textwidth]{tradeoff.pdf}
+\caption{Handover admission (left) and whole-network full service (right) against incumbent displacement at $\lambda=1$. Bars are 95\% confidence intervals of the per-method mean. Seed-to-seed variation is large, but all methods are paired by seed.}
+\label{fig:tradeoff}
 \end{figure*}
 
-The aggregate mean modeled latency is \PPOLatency~ms for PPO and \NoResLatency~ms without reservation; Fig.~\ref{fig:cdf} separates the three slice distributions. Reservation is an admission mechanism, not a latency cure: when a handover remains demand-limited, the synthetic shortfall penalty dominates. Per-slice calibration against a link/system-level simulator is required before operational conclusions.
+\subsection{Price response}
+The displacement price changes which policy is right. Table~\ref{tab:frontier} and Fig.~\ref{fig:frontier} report utility at each price for the methods that are trained or tuned per price. Floor-JIT has no price parameter and collapses from \LamQuarterFloorJITUtil{} at $\lambda=0.25$ to \LamSixteenFloorJITUtil{} at $\lambda=16$. CARE adapts: the share of its decisions that commit a hold falls from \LamQuarterCareHold\% to \LamSixteenCareHold\%, and its utility is within $0.6$ RB per interval of the best tuned rule at every price. The gaps (CARE minus tuned rule) are \FrontQuarterTunedDiff{}, \FrontOneTunedDiff{}, \FrontFourTunedDiff{} and \FrontSixteenTunedDiff{} at $\lambda=0.25,1,4,16$.
 
-\section{Validity, Reproducibility, and Limitations}
-Capacity is asserted after every handover and interval in unit tests, including simultaneous arrivals at one cell. Other tests cover no-op feasibility, action bounds, deterministic matched traces, undefined zero-denominator metrics, masked probabilities, and finite PPO updates. Raw per-method means and standard deviations are retained in CSV/JSON. A web dashboard exposes UE motion, slice classes, contracts, clickable RB ledgers, and handover outcomes.
+At $\lambda=16$, the right answer is never to hold, which both tuned rules find. CARE still holds on \LamSixteenCareHold\% of decisions, and its utility differs from theirs by \FrontSixteenTunedDiff{} RB per interval ($p=\FrontSixteenTunedP$, Holm-adjusted within the frontier family). The low-price end shows a different trade. The tuned rule at $\lambda=0.25$ (\TunedRuleQuarter) holds on every forecast and displaces \LamQuarterTunedDisplaced\% of capacity to reach \LamQuarterTunedUtil{}. CARE reaches \LamQuarterCareUtil{} while committing \LamQuarterCareHold\% of decisions and displacing \LamQuarterCareDisplaced\%. When incumbent displacement is nearly free, the utility metric rewards the rule. CARE gets within about 4\% of it with about a fifth of the displacement and a quarter of the reservation requests.
 
-The experiment is synthetic. It abstracts channel quality, beam failure, signaling delay, HARQ, a standards-compliant scheduler, and per-slice hard isolation. The predictor is controlled stochastic kinematics with an uncalibrated score, not a fitted model. The serialized one-candidate decision rule limits controller throughput, and the linear PPO policy is intentionally small. Icons for cars, drones, and robots are illustrative; they share the same mobility model. Consequently, the numerical results establish internal algorithmic behavior and reproducibility, not deployment performance. Future work should fit calibrated predictors, evaluate across more seeds and scenarios, include realistic NR link adaptation, and test multi-candidate control~\cite{li2020mobility,gharehgoli2023uncertainty}.
+\begin{table}[t]
+\centering
+\caption{Held-out utility at each displacement price (RB per interval, 20 seeds) and, in parentheses, the share of forecast decisions that commit a hold. Each method is retrained or retuned for each price; bold is the best mean.}
+\label{tab:frontier}
+\resizebox{\columnwidth}{!}{\input{results/care/frontier_table.tex}}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.92\columnwidth]{frontier.pdf}
+\caption{Held-out net utility against the displacement price (95\% CIs). The PPO-trained variants collapse to holding on every forecast or to never holding.}
+\label{fig:frontier}
+\end{figure}
+
+\subsection{Ablations}
+\textbf{Calibration.} Compared with the same learner trained and run on the constant score, CARE admits \VsCareUncalHSRDiff{} points more handovers ($[\VsCareUncalHSRLow,\VsCareUncalHSRHigh]$, $p=\VsCareUncalHSRP$, \VsCareUncalHSRWins/20 seeds). Its outage changes by \VsCareUncalOutageDiff{} points ($p=\VsCareUncalOutageP$) and its utility by \VsCareUncalUtilDiff{} ($p=\VsCareUncalUtilP$). This is the largest admission effect of any CARE ablation.
+
+\textbf{Learner.} The PPO-trained actors behave as diagnosed in Section~\ref{sec:care} (Fig.~\ref{fig:training}). With the on-policy wait backup, the actor commits a hold on every forecast at every price. On the test seeds it is identical to Floor-JIT, and at $\lambda=16$ CARE's utility exceeds it by \FrontSixteenCarePPOOnPolicyDiff{} RB per interval. With the floored backup, the actor holds on every forecast for $\lambda\le1$ and never for $\lambda\ge4$. At $\lambda=4$, where selective holding pays, CARE's utility exceeds it by \FrontFourCarePPODiff{} RB per interval ($p=\FrontFourCarePPOP$).
+
+\textbf{Ensemble.} The ensemble's utility minus that of the best single replica is \FrontOneCareSingleDiff{} at $\lambda=1$, where holding is rarely costly, and is not significant. It is \FrontFourCareSingleDiff{} at $\lambda=4$ ($p=\FrontFourCareSingleP$) and \FrontSixteenCareSingleDiff{} at $\lambda=16$ ($p=\FrontSixteenCareSingleP$), where a single network's overestimated hold values commit costly holds.
+
+\textbf{Contract mechanics} (Floor-JIT, $\lambda=1$). Removing retiming of pending holds lowers admission from \AblFullHSR\% to \AblNoRetimeHSR\%. With unprotected activation, \AblFreeActReject\% of activations are rejected and admission falls to \AblFreeActHSR\%: the floor-protection rule claims the safe capacity rather than racing incumbents for it. One decision per interval, as in the legacy pipeline, gives \AblSingleHSR\%. Under the legacy mechanics as a whole, proactive reservation lifts admission only from \LegacyNoResHSR\% to \LegacyFixedHSR\%.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.82\textwidth]{training.pdf}
+\caption{Share of training decisions that commit a hold, per price (replica 101, 8-episode moving average). CARE's curves include $\epsilon$-greedy exploration. The PPO actor converges to all-or-nothing policies.}
+\label{fig:training}
+\end{figure*}
+
+\subsection{What CARE learned}
+CARE mostly waits (Fig.~\ref{fig:policy}): \CareWaitURLLC\% of uRLLC, \CareWaitEMBB\% of eMBB and \CareWaitMMTC\% of mMTC decisions. When it commits, it nearly always holds the admission floor (\CareFloorURLLC\%, \CareFloorEMBB\% and \CareFloorMMTC\% of decisions). Forecast-demand and upper-quantile holds are rare (at most \CareDemandURLLC\% and \CareUpperURLLC\%, both for uRLLC). The learned behavior agrees with the tuned rules, which also chose floor holds (\TunedRule{} at $\lambda=1$). CARE's mean commitment lead is \CareLead{} intervals before arrival, against \FloorJITLead{} for Floor-JIT.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.9\columnwidth]{policy.pdf}
+\caption{CARE's decisions by slice at $\lambda=1$ on the test seeds (amount/activation timing).}
+\label{fig:policy}
+\end{figure}
+
+\subsection{Sensitivity without retraining}
+Fig.~\ref{fig:sweeps} varies one condition at a time while keeping every trained and tuned parameter fixed. CARE tracks Floor-JIT and the tuned rule as the re-establishment outage varies (0 to 6 intervals) and as load varies (24 to 48 UEs). At 48 UEs, admission falls to about 53\% for all three, against \SwUesFortyEightNoResHSR\% without reservation. CARE generalizes worse to a longer preparation delay than it was trained with. At three intervals its admission is \SwPrepThreeCareHSR\% against \SwPrepThreeTunedHSR\% for the tuned rule, because its learned timing assumes holds activate one interval after the request.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.82\textwidth]{sweeps.pdf}
+\caption{Handover admission when one condition changes and nothing is retrained or retuned (95\% CIs over 20 test seeds).}
+\label{fig:sweeps}
+\end{figure*}
+
+\section{Discussion and Limitations}
+\textbf{What the evidence supports.} Calibrated target confidence and per-contract counterfactual accounting are what make proactive reservation efficient in this model. Removing calibration costs the most admission, and pricing displacement explicitly is what separates the price-aware policies from Floor-JIT. A learned controller trained on these signals reaches the performance of a carefully tuned threshold rule and adapts to the displacement price. It does not surpass the rule, and we do not claim that it does. The negative result about policy gradients is itself useful: a per-decision credit design that looks natural silently collapses into the trivial policy.
+
+\textbf{Why a rule is hard to beat here.} The decision is close to one-dimensional. Given calibrated confidence and floor-protected just-in-time activation, whether to hold depends mostly on how likely the forecast is to be right, and a threshold captures that. A learned policy would have more to offer with richer state the rule ignores, such as correlated arrivals, multi-cell congestion and heterogeneous outage costs. With 240 training episodes, CARE's value estimates remain noisy enough that a rule tuned on 10 seeds is competitive.
+
+\textbf{Future work: choosing the target cell.} CARE reserves at the nearest-site target and never considers sending a device to a farther but less loaded cell. The simulator already contains a QoS-aware selection rule that scores candidate cells by available capacity, signal, modeled latency and slice floor, with hysteresis and time-to-trigger, but CARE was not evaluated with it. Making the target part of CARE's action would turn reservation into a joint steering-and-holding decision. That is a multi-cell trade-off that a single confidence threshold cannot express, and it is where a learned controller is most likely to beat a rule. It requires calibrating load-dependent targets and extending the counterfactual to the two cells involved.
+
+\textbf{Limitations.} The simulator abstracts radio, signaling and scheduling: admission is a capacity check plus a 1\% radio failure, latency is a load-dependent proxy, and the counterfactual is exact only for its memoryless priority scheduler. The topology has four cells and 32 UEs with random-walk mobility. The utility weights ($w_s$, $q$, $T$) are modeling choices that change which policy is best. The learner was revised once after seeing a held-out evaluation (Section~\ref{sec:protocol}). None of these results establish field performance or 3GPP conformance.
+
+\section{Reproducibility and Demonstration}
+One command reruns the pipeline (calibration, training, tuning, held-out evaluation and reporting), and a second regenerates every table, figure and number in this paper from the saved per-seed runs. An automated test checks that the manuscript contains no hand-typed results. An interactive web lab replays any seed with CARE and with no reservation side by side, on identical mobility, traffic and radio draws. It shows each decision's calibrated confidence and the ensemble's action values, and it includes this paper's benchmark setting (test seed 9000).
 
 \section{Conclusion}
-We developed a complete uncertainty-aware proactive reservation artifact for sliced 5G handovers.  Its central design choice is to preserve uncertainty as observable error while enforcing capacity through a causal contract ledger and a masked PPO action space.  Experiments show modest QoS/reliability gains with measurable occupancy, waste, and blocking costs.  The absence of uniform dominance is itself informative: proactive reservation should be selected from an explicit reliability--efficiency frontier, not justified by a single aggregate score.
+CARE treats handover reservation as priced optimal stopping. It uses a calibrated estimate of where a device is going, credits each hold only for admissions it actually rescues, charges it exactly for the capacity it takes from incumbents, and learns by fitted Q iteration with a Q-ensemble when, whether and how much to hold. On held-out matched seeds, CARE raises handover admission from \NoResHSR\% to \CareHSR\% and adapts its holding to the price of displacement. It stays within $0.6$ RB per interval of the best tuned rule at every price. The same evaluation shows that a calibrated threshold rule using the same mechanics is as good or slightly better. For practitioners, calibrated confidence, explicit displacement pricing and floor-protected just-in-time holds are the components to adopt.
 
 \bibliographystyle{IEEEtran}
 \bibliography{references}

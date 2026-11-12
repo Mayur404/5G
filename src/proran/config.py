@@ -42,6 +42,14 @@ class SimConfig:
     common_radio_stream: bool = False
     prediction_mode: str = "synthetic"
     research_metrics: bool = False
+    # Opt-in v2 semantics used by the CARE study; defaults reproduce legacy runs.
+    action_set: str = "legacy"
+    max_decisions: int = 1
+    failure_outage: int = 0
+    activation_rule: str = "free"
+    sla_capped_by_demand: bool = False
+    preparation_delay: int = 0
+    retime_pending: bool = False
     slices: tuple[SliceProfile, ...] = field(
         default_factory=lambda: (
             SliceProfile("eMBB", 10.5, 3.0, 7, 20.0, 2, "#2878B5"),
@@ -55,6 +63,14 @@ class SimConfig:
             raise ValueError("handover_mode must be nearest or qos_aware")
         if self.prediction_mode not in {"synthetic", "kinematic"}:
             raise ValueError("prediction_mode must be synthetic or kinematic")
+        if self.action_set not in {"legacy", "v2"}:
+            raise ValueError("action_set must be legacy or v2")
+        if self.activation_rule not in {"free", "floor_protected"}:
+            raise ValueError("activation_rule must be free or floor_protected")
+        for name, low in (("max_decisions", 1), ("failure_outage", 0), ("preparation_delay", 0)):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, Integral) or value < low:
+                raise ValueError(f"{name} must be an integer of at least {low}")
         if not math.isfinite(self.signal_radius) or self.signal_radius <= 0:
             raise ValueError("signal_radius must be finite and positive")
         if not 0 <= self.minimum_signal <= 1 or not 0 <= self.switch_margin <= 1:
@@ -146,40 +162,14 @@ class SimConfig:
     def as_dict(self) -> dict:
         return asdict(self)
 
-
-@dataclass
-class TrainConfig:
-    episodes: int = 60
-    gamma: float = 0.985
-    gae_lambda: float = 0.95
-    clip: float = 0.2
-    actor_lr: float = 0.002
-    critic_lr: float = 0.025
-    update_epochs: int = 6
-    entropy_coef: float = 0.0005
-    imitation_episodes: int = 12
-    imitation_epochs: int = 45
-    imitation_lr: float = 0.012
-    seed: int = 41
-
-    def __post_init__(self) -> None:
-        for name in ("episodes", "update_epochs"):
-            value = getattr(self, name)
-            if isinstance(value, bool) or not isinstance(value, Integral) or value <= 0:
-                raise ValueError(f"{name} must be a positive integer")
-        for name in ("imitation_episodes", "imitation_epochs", "seed"):
-            value = getattr(self, name)
-            if isinstance(value, bool) or not isinstance(value, Integral) or value < 0:
-                raise ValueError(f"{name} must be a nonnegative integer")
-        for name in ("gamma", "gae_lambda"):
-            value = getattr(self, name)
-            if not math.isfinite(value) or not 0 <= value <= 1:
-                raise ValueError(f"{name} must be between zero and one")
-        if not math.isfinite(self.clip) or not 0 < self.clip < 1:
-            raise ValueError("clip must be between zero and one, exclusively")
-        for name in ("actor_lr", "critic_lr", "imitation_lr"):
-            value = getattr(self, name)
-            if not math.isfinite(value) or value <= 0:
-                raise ValueError(f"{name} must be finite and positive")
-        if not math.isfinite(self.entropy_coef) or self.entropy_coef < 0:
-            raise ValueError("entropy_coef must be finite and nonnegative")
+    @classmethod
+    def from_dict(cls, values: dict) -> "SimConfig":
+        """Inverse of :meth:`as_dict`, restoring nested slice profiles and tuples."""
+        values = dict(values)
+        if "slices" in values:
+            values["slices"] = tuple(
+                s if isinstance(s, SliceProfile) else SliceProfile(**s) for s in values["slices"]
+            )
+        if values.get("centers") is not None:
+            values["centers"] = tuple(tuple(c) for c in values["centers"])
+        return cls(**values)

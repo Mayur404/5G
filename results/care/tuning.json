@@ -1,0 +1,330 @@
+{
+  "rules": {
+    "0.25": {
+      "uniform": [
+        "floor",
+        "now",
+        0.0
+      ],
+      "uniform_tuning_utility": 14.8953125,
+      "per_slice": [
+        [
+          "floor",
+          "now",
+          0.6
+        ],
+        [
+          "demand",
+          "now",
+          0.8
+        ],
+        [
+          "floor",
+          "jit",
+          0.9
+        ]
+      ]
+    },
+    "1.0": {
+      "uniform": [
+        "floor",
+        "jit",
+        0.9
+      ],
+      "uniform_tuning_utility": 12.3096875,
+      "per_slice": [
+        [
+          "floor",
+          "jit",
+          0.95
+        ],
+        [
+          "floor",
+          "jit",
+          0.9
+        ],
+        [
+          "floor",
+          "jit",
+          0.95
+        ]
+      ]
+    },
+    "4.0": {
+      "uniform": [
+        "floor",
+        "jit",
+        0.9
+      ],
+      "uniform_tuning_utility": 6.13625,
+      "per_slice": [
+        [
+          "floor",
+          "jit",
+          0.95
+        ],
+        [
+          "floor",
+          "jit",
+          0.9
+        ],
+        null
+      ]
+    },
+    "16.0": {
+      "uniform": null,
+      "uniform_tuning_utility": 0.0,
+      "per_slice": [
+        null,
+        null,
+        null
+      ]
+    }
+  },
+  "care_replicas": {
+    "fqi@0.25": 102,
+    "fqi@1": 102,
+    "fqi@4": 102,
+    "fqi@16": 102,
+    "ppo@0.25": 102,
+    "ppo@1": 101,
+    "ppo@4": 101,
+    "ppo@16": 101,
+    "ppo_onpolicy@1": 101,
+    "ppo_onpolicy@16": 101,
+    "fqi_uncal@1": 102
+  },
+  "replica_scores": [
+    {
+      "variant": "fqi",
+      "lam": 0.25,
+      "calibrated": true,
+      "replica": 101,
+      "tuning_utility": 13.784609374999999
+    },
+    {
+      "variant": "fqi",
+      "lam": 0.25,
+      "calibrated": true,
+      "replica": 102,
+      "tuning_utility": 13.908125000000002
+    },
+    {
+      "variant": "fqi",
+      "lam": 0.25,
+      "calibrated": true,
+      "replica": 103,
+      "tuning_utility": 13.325
+    },
+    {
+      "variant": "fqi",
+      "lam": 1.0,
+      "calibrated": true,
+      "replica": 101,
+      "tuning_utility": 11.812187500000002
+    },
+    {
+      "variant": "fqi",
+      "lam": 1.0,
+      "calibrated": true,
+      "replica": 102,
+      "tuning_utility": 12.110937500000002
+    },
+    {
+      "variant": "fqi",
+      "lam": 1.0,
+      "calibrated": true,
+      "replica": 103,
+      "tuning_utility": 11.8434375
+    },
+    {
+      "variant": "fqi",
+      "lam": 4.0,
+      "calibrated": true,
+      "replica": 101,
+      "tuning_utility": 5.45875
+    },
+    {
+      "variant": "fqi",
+      "lam": 4.0,
+      "calibrated": true,
+      "replica": 102,
+      "tuning_utility": 5.51125
+    },
+    {
+      "variant": "fqi",
+      "lam": 4.0,
+      "calibrated": true,
+      "replica": 103,
+      "tuning_utility": 5.24
+    },
+    {
+      "variant": "fqi",
+      "lam": 16.0,
+      "calibrated": true,
+      "replica": 101,
+      "tuning_utility": -3.8425
+    },
+    {
+      "variant": "fqi",
+      "lam": 16.0,
+      "calibrated": true,
+      "replica": 102,
+      "tuning_utility": -3.635625
+    },
+    {
+      "variant": "fqi",
+      "lam": 16.0,
+      "calibrated": true,
+      "replica": 103,
+      "tuning_utility": -5.551875000000001
+    },
+    {
+      "variant": "ppo",
+      "lam": 0.25,
+      "calibrated": true,
+      "replica": 101,
+      "tuning_utility": 13.789296875
+    },
+    {
+      "variant": "ppo",
+      "lam": 0.25,
+      "calibrated": true,
+      "replica": 102,
+      "tuning_utility": 13.886328125
+    },
+    {
+      "variant": "ppo",
+      "lam": 0.25,
+      "calibrated": true,
+      "replica": 103,
+      "tuning_utility": 13.886328125
+    },
+    {
+      "variant": "ppo",
+      "lam": 1.0,
+      "calibrated": true,
+      "replica": 101,
+      "tuning_utility": 12.2984375
+    },
+    {
+      "variant": "ppo",
+      "lam": 1.0,
+      "calibrated": true,
+      "replica": 102,
+      "tuning_utility": 12.2984375
+    },
+    {
+      "variant": "ppo",
+      "lam": 1.0,
+      "calibrated": true,
+      "replica": 103,
+      "tuning_utility": 12.0434375
+    },
+    {
+      "variant": "ppo",
+      "lam": 4.0,
+      "calibrated": true,
+      "replica": 101,
+      "tuning_utility": 0.0
+    },
+    {
+      "variant": "ppo",
+      "lam": 4.0,
+      "calibrated": true,
+      "replica": 102,
+      "tuning_utility": 0.0
+    },
+    {
+      "variant": "ppo",
+      "lam": 4.0,
+      "calibrated": true,
+      "replica": 103,
+      "tuning_utility": 0.0
+    },
+    {
+      "variant": "ppo",
+      "lam": 16.0,
+      "calibrated": true,
+      "replica": 101,
+      "tuning_utility": 0.0
+    },
+    {
+      "variant": "ppo",
+      "lam": 16.0,
+      "calibrated": true,
+      "replica": 102,
+      "tuning_utility": 0.0
+    },
+    {
+      "variant": "ppo",
+      "lam": 16.0,
+      "calibrated": true,
+      "replica": 103,
+      "tuning_utility": 0.0
+    },
+    {
+      "variant": "ppo_onpolicy",
+      "lam": 1.0,
+      "calibrated": true,
+      "replica": 101,
+      "tuning_utility": 12.2984375
+    },
+    {
+      "variant": "ppo_onpolicy",
+      "lam": 1.0,
+      "calibrated": true,
+      "replica": 102,
+      "tuning_utility": 12.2984375
+    },
+    {
+      "variant": "ppo_onpolicy",
+      "lam": 1.0,
+      "calibrated": true,
+      "replica": 103,
+      "tuning_utility": 12.2984375
+    },
+    {
+      "variant": "ppo_onpolicy",
+      "lam": 16.0,
+      "calibrated": true,
+      "replica": 101,
+      "tuning_utility": -19.459375
+    },
+    {
+      "variant": "ppo_onpolicy",
+      "lam": 16.0,
+      "calibrated": true,
+      "replica": 102,
+      "tuning_utility": -19.459375
+    },
+    {
+      "variant": "ppo_onpolicy",
+      "lam": 16.0,
+      "calibrated": true,
+      "replica": 103,
+      "tuning_utility": -19.459375
+    },
+    {
+      "variant": "fqi",
+      "lam": 1.0,
+      "calibrated": false,
+      "replica": 101,
+      "tuning_utility": 11.6415625
+    },
+    {
+      "variant": "fqi",
+      "lam": 1.0,
+      "calibrated": false,
+      "replica": 102,
+      "tuning_utility": 12.053749999999997
+    },
+    {
+      "variant": "fqi",
+      "lam": 1.0,
+      "calibrated": false,
+      "replica": 103,
+      "tuning_utility": 11.8125
+    }
+  ]
+}

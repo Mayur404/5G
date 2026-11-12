@@ -1,0 +1,13 @@
+\begin{tabular}{lrrrr}
+\toprule
+Method & $\lambda=0.25$ & $\lambda=1$ & $\lambda=4$ & $\lambda=16$\\
+\midrule
+Floor-JIT & 14.12 (100\%) & 12.56 (100\%) & 6.30 (100\%) & -18.73 (100\%)\\
+Tuned rule & \textbf{14.70 (100\%)} & 12.59 (41\%) & 6.50 (41\%) & \textbf{0.00 (0\%)}\\
+Slice-tuned rule & 14.53 (71\%) & \textbf{12.65 (32\%)} & \textbf{6.78 (18\%)} & \textbf{0.00 (0\%)}\\
+\textbf{CARE} & 14.10 (24\%) & 12.38 (26\%) & 6.45 (20\%) & -0.25 (2\%)\\
+CARE single network & 14.31 (49\%) & 12.40 (65\%) & 5.66 (24\%) & -4.11 (4\%)\\
+CARE-PPO & 14.12 (100\%) & 12.56 (100\%) & 0.00 (0\%) & \textbf{0.00 (0\%)}\\
+CARE-PPO w/ on-policy wait & -- & 12.56 (100\%) & -- & -18.73 (100\%)\\
+\bottomrule
+\end{tabular}

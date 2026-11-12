@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import csv
-import json
 import math
 import os
 import secrets
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
 from threading import Lock
 
@@ -13,22 +12,56 @@ import numpy as np
 from flask import Flask, jsonify, request, send_from_directory
 from waitress import serve
 
-from proran.actions import ACTION_CATALOG, decode_action
+from proran.actions import ACTION_CATALOG, ACTION_CATALOG_V2, decode_action, decode_action_v2
+from proran.calibration import LogisticCalibrator
+from proran.care import CareConfig, CareEnsemblePolicy
 from proran.config import SimConfig
 from proran.neural import NeuralPredictor, proactive
-from proran.policies import SavedPPOPolicy, no_reservation
+from proran.policies import no_reservation
 from proran.simulator import RANHandoverEnv
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "web" / "static"
-MODEL = ROOT / "results" / "ppo_model.npz"
-RESULTS = ROOT / "results" / "results.json"
 DEEP_MODEL = ROOT / "results/deep/predictor.npz"
+CARE_DIR = ROOT / "results" / "care"
 CONTROLLERS = {
-    "linear_ppo": "Legacy linear PPO",
-    "deep_nearest": "Deep forecast / nearest cell",
-    "deep_qos": "Deep forecast / QoS-aware cell",
+    "care": "CARE (calibrated learned reservation, Q-ensemble)",
+    "deep_qos": "Forecast rule / QoS-aware target cell",
+    "deep_nearest": "Forecast rule / nearest target cell",
 }
+# Contract mechanics used by the CARE study (proran.care_experiment.BASE).
+CARE_MECHANICS = {
+    "common_radio_stream": True,
+    "prediction_mode": "kinematic",
+    "research_metrics": True,
+    "action_set": "v2",
+    "max_decisions": 32,
+    "failure_outage": 3,
+    "activation_rule": "floor_protected",
+    "sla_capped_by_demand": True,
+    "preparation_delay": 1,
+    "retime_pending": True,
+}
+
+
+def care_model_paths() -> list[Path]:
+    """CARE's Q-network replicas at the paper's main price (lambda = 1)."""
+    return [CARE_DIR / "models" / f"care_l1_r{replica}.npz" for replica in (101, 102, 103)]
+
+
+def care_available() -> bool:
+    return (CARE_DIR / "calibrator.npz").exists() and all(
+        path.exists() for path in care_model_paths()
+    )
+
+
+class _Result:
+    """Minimal step result for multi-decision intervals (only ``info`` is rendered)."""
+
+    def __init__(self, info: dict):
+        self.info = info
+
+
 HEX_RADIUS = 19.0
 HEX_SPACING = math.sqrt(3) * HEX_RADIUS
 
@@ -41,7 +74,7 @@ SCENARIOS = {
         "speed": 1.0,
         "seed": 21,
         "focus_uid": 1,
-        "description": "A car crosses from C2 to C0; PPO holds 8 RBs before it arrives.",
+        "description": "A uRLLC car crosses from C2 to C0. CARE holds its 5-RB admission floor at C0, so the arrival is admitted; the unreserved network blocks it.",
     },
     "crossing": {
         "label": "Fast crossing into a busy cell",
@@ -79,7 +112,16 @@ SCENARIOS = {
         "seed": 42,
         "focus_uid": 1,
         "centers": [[25.0, 25.0], [75.0, 25.0], [25.0, 75.0], [75.0, 75.0], [50.0, 50.0]],
-        "description": "Seven devices move among five sites. Nearest-site geometry selects the target; PPO controls reservation amount and timing.",
+        "description": "Seven devices move among five sites. Nearest-site geometry selects the target; the controller decides whether, how much and when to hold capacity.",
+    },
+    "benchmark": {
+        "label": "Paper benchmark (32 devices)",
+        "n_ues": 32,
+        "capacity": 60,
+        "speed": 1.0,
+        "seed": 9000,
+        "focus_uid": 0,
+        "description": "The CARE evaluation setting: 32 devices, 60-RB cells, held-out test seed 9000. Both networks see identical movement, traffic and radio draws.",
     },
 }
 
@@ -91,11 +133,11 @@ def _finite(value):
 
 
 class ComparisonSession:
-    def __init__(self, seed: int, scenario: str, controller: str = "linear_ppo"):
+    def __init__(self, seed: int, scenario: str, controller: str = "care"):
         if controller not in CONTROLLERS:
             raise ValueError("Unknown controller")
-        if controller == "linear_ppo" and not MODEL.exists():
-            raise FileNotFoundError(f"Saved PPO model is required for the comparison: {MODEL}")
+        if controller == "care" and not care_available():
+            raise FileNotFoundError("Trained CARE actor and calibrator are required")
         preset = SCENARIOS.get(scenario, SCENARIOS["hex_cluster"])
         centers = preset.get("centers")
         cfg = SimConfig(
@@ -104,11 +146,14 @@ class ComparisonSession:
             cell_capacity=preset["capacity"],
             centers=tuple(tuple(float(coord) for coord in c) for c in centers) if centers else None,
             hex_radius=preset.get("hex_radius"),
-            common_radio_stream=controller != "linear_ppo",
-            prediction_mode="synthetic" if controller == "linear_ppo" else "kinematic",
+            common_radio_stream=True,
+            prediction_mode="kinematic",
             urllc_burst_prob=preset.get("burst_prob", 0.08),
             episode_steps=100_000,
         )
+        if controller == "care":
+            # Both networks share CARE's contract mechanics so the comparison is matched.
+            cfg = replace(cfg, **CARE_MECHANICS)
         self.scenario = scenario if scenario in SCENARIOS else "hex_cluster"
         self.seed = seed
         self.controller_kind = controller
@@ -124,18 +169,14 @@ class ComparisonSession:
                     ue.vel *= preset["speed"]
             self.normal_obs = self.normal.observe()
             self.proposed_obs = self.proposed.observe()
-        self.policy = SavedPPOPolicy.load(str(MODEL)) if controller == "linear_ppo" else proactive
-        self.controller_name = (
-            "BC-initialized masked PPO" if controller == "linear_ppo" else CONTROLLERS[controller]
-        )
-        if controller != "linear_ppo":
-            self.proposed.neural_predictor = NeuralPredictor.load(DEEP_MODEL)
-            self.proposed_obs = self.proposed.observe()
-        self.critic_w = self.critic_b = None
-        if controller == "linear_ppo":
-            with np.load(MODEL) as model:
-                self.critic_w = model["critic_w"].copy()
-                self.critic_b = float(model["critic_b"][0])
+        self.policy = proactive
+        self.controller_name = CONTROLLERS[controller]
+        self.proposed.neural_predictor = NeuralPredictor.load(DEEP_MODEL)
+        self.proposed_obs = self.proposed.observe()
+        if controller == "care":
+            self.policy = CareEnsemblePolicy.load(care_model_paths())
+            self.proposed.confidence_model = LogisticCalibrator.load(CARE_DIR / "calibrator.npz")
+            self.proposed_obs = None  # CARE observes every forecast UE via observe_many().
         self.focus_id = int(preset["focus_uid"])
         self.last_normal = None
         self.last_proposed = None
@@ -152,28 +193,6 @@ class ComparisonSession:
         state, mask, context = observation
         prediction = context.get("prediction")
         distribution = []
-        value_estimate = None
-        if isinstance(policy, SavedPPOPolicy):
-            probabilities = policy._probabilities(state, mask, policy.weights, policy.bias)
-            for action_id, probability in enumerate(probabilities):
-                if mask[action_id]:
-                    if action_id == 0:
-                        label = "No reservation"
-                    else:
-                        amount, delay = decode_action(
-                            action_id, prediction.demand_rbs, prediction.time_to_handover
-                        )
-                        fraction = (
-                            "half" if ACTION_CATALOG[action_id].amount_fraction == 0.5 else "full"
-                        )
-                        timing = "now" if delay == 0 else f"in {delay * env.cfg.dt_s:.1f} s"
-                        label = f"{amount} RB ({fraction}) · {timing}"
-                    distribution.append(
-                        {"action": action_id, "label": label, "probability": float(probability)}
-                    )
-            distribution.sort(key=lambda item: item["probability"], reverse=True)
-            if self.critic_w is not None:
-                value_estimate = float(state @ self.critic_w + self.critic_b)
         action = int(policy(state, mask, context))
         if policy is proactive:
             for action_id in np.flatnonzero(mask):
@@ -208,7 +227,6 @@ class ComparisonSession:
             "predicted_rbs": prediction.demand_rbs if prediction else None,
             "eta_steps": prediction.time_to_handover if prediction else None,
             "distribution": distribution,
-            "value_estimate": value_estimate,
         }
         if prediction:
             amount, delay = decode_action(
@@ -224,6 +242,72 @@ class ComparisonSession:
             )
         return result, next_obs, decision
 
+    def _care_label(self, env, action: int, context: dict) -> tuple[str, int, int]:
+        prediction = context["prediction"]
+        if action == 0:
+            return "Wait (no hold yet)", 0, 0
+        amount, delay = decode_action_v2(
+            action,
+            prediction.demand_rbs,
+            prediction.time_to_handover,
+            context["floor"],
+            prediction.demand_upper,
+        )
+        delay = max(delay, env.cfg.preparation_delay)
+        spec = ACTION_CATALOG_V2[action]
+        kind = {"floor": "admission floor", "demand": "forecast demand", "upper": "upper quantile"}
+        return f"{amount} RB ({kind[spec.amount]}) · in {delay * env.cfg.dt_s:.1f} s", amount, delay
+
+    def _advance_care(self):
+        """One interval of CARE: one greedy decision per forecast, uncontracted UE."""
+        env = self.proposed
+        observations = env.observe_many()
+        actions = [int(self.policy(state, mask, context)) for state, mask, context in observations]
+        step = env.t
+        _, _, info = env.step_many(actions, observations)
+        decision = None
+        if observations:
+            # Show the selected device's decision when it has one, else a committed
+            # hold, else the most urgent forecast (observations are sorted by lead).
+            def rank(i):
+                ue = observations[i][2]["prediction"].ue_id
+                return (ue != self.focus_id, actions[i] == 0, i)
+
+            index = min(range(len(observations)), key=rank)
+            state, mask, context = observations[index]
+            prediction = context["prediction"]
+            action = actions[index]
+            # Ensemble-mean action values, converted from training units to
+            # expected net slice-weighted RBs gained by this decision.
+            values = self.policy.values(state) * CareConfig().reward_scale
+            distribution = []
+            for action_id in np.flatnonzero(mask):
+                label, _, _ = self._care_label(env, int(action_id), context)
+                distribution.append(
+                    {"action": int(action_id), "label": label, "value": float(values[action_id])}
+                )
+            distribution.sort(key=lambda item: item["value"], reverse=True)
+            label, amount, delay = self._care_label(env, action, context)
+            decision = {
+                "step": step,
+                "action": action,
+                "label": label,
+                "ue": prediction.ue_id,
+                "target": prediction.target,
+                "probability": prediction.probability,
+                "uncertainty": prediction.target_uncertainty,
+                "predicted_rbs": prediction.demand_rbs,
+                "eta_steps": prediction.time_to_handover,
+                "distribution": distribution,
+                "amount_rbs": amount,
+                "delay_steps": delay,
+                "eta_s": prediction.time_to_handover * env.cfg.dt_s,
+                "delay_s": delay * env.cfg.dt_s,
+                "candidates": len(observations),
+                "committed": int(sum(a > 0 for a in actions)),
+            }
+        return _Result(info), decision
+
     def step(self, count: int = 1) -> dict:
         count = max(1, min(count, 12))
         normal_decision = proposed_decision = None
@@ -231,9 +315,12 @@ class ComparisonSession:
             self.last_normal, self.normal_obs, normal_decision = self._advance(
                 self.normal, self.normal_obs, no_reservation
             )
-            self.last_proposed, self.proposed_obs, proposed_decision = self._advance(
-                self.proposed, self.proposed_obs, self.policy
-            )
+            if self.controller_kind == "care":
+                self.last_proposed, proposed_decision = self._advance_care()
+            else:
+                self.last_proposed, self.proposed_obs, proposed_decision = self._advance(
+                    self.proposed, self.proposed_obs, self.policy
+                )
             self._record_history()
         return self.snapshot(normal_decision, proposed_decision)
 
@@ -434,52 +521,43 @@ def create_app() -> Flask:
     def manuscript():
         return send_from_directory(ROOT, "paper.tex", mimetype="text/plain")
 
+    @app.get("/paper.pdf")
+    def manuscript_pdf():
+        return send_from_directory(ROOT, "paper.pdf", mimetype="application/pdf")
+
     @app.get("/references.bib")
     def bibliography():
         return send_from_directory(ROOT, "references.bib", mimetype="text/plain")
 
     @app.get("/api/meta")
     def meta():
-        published = None
-        if RESULTS.exists():
-            published = json.loads(RESULTS.read_text(encoding="utf-8"))
-        deep_results = ROOT / "results/deep/results.json"
-        deep_published = (
-            json.loads(deep_results.read_text(encoding="utf-8")) if deep_results.exists() else None
-        )
-        learning = {"imitation": [], "ppo": []}
-        for key, filename in (
-            ("imitation", "imitation_history.csv"),
-            ("ppo", "training_history.csv"),
-        ):
-            path = ROOT / "results" / filename
-            if path.exists():
-                with path.open(encoding="utf-8") as fh:
-                    learning[key] = [
-                        {name: float(value) for name, value in row.items()}
-                        for row in csv.DictReader(fh)
-                    ]
-        paired = []
-        paired_path = ROOT / "results" / "paired_comparisons.csv"
-        if paired_path.exists():
-            with paired_path.open(encoding="utf-8") as fh:
-                paired = [
-                    {
-                        name: (value if name in {"reference", "metric"} else float(value))
-                        for name, value in row.items()
-                    }
-                    for row in csv.DictReader(fh)
-                ]
+        care_summary = []
+        summary_path = CARE_DIR / "summary.csv"
+        if summary_path.exists():
+            keys = (
+                "handover_success_rate",
+                "outage_fraction",
+                "full_service_rate",
+                "displaced_rb_fraction",
+                "utility@1",
+            )
+            with summary_path.open(encoding="utf-8") as fh:
+                for row in csv.DictReader(fh):
+                    care_summary.append(
+                        {
+                            "method": row["method"],
+                            **{k: _finite(float(row[f"{k}_mean"])) for k in keys},
+                            **{k + "_ci95": _finite(float(row[f"{k}_ci95"])) for k in keys},
+                        }
+                    )
         return jsonify(
             {
                 "scenarios": SCENARIOS,
-                "published": published,
-                "learning": learning,
-                "deep_published": deep_published,
                 "controllers": CONTROLLERS,
+                "slices": [asdict(profile) for profile in SimConfig().slices],
                 "deep_model_available": DEEP_MODEL.exists(),
-                "paired": paired,
-                "model_available": MODEL.exists(),
+                "care_available": care_available(),
+                "care_summary": care_summary,
             }
         )
 
@@ -490,12 +568,12 @@ def create_app() -> Flask:
             body = {}
         if not isinstance(body, dict):
             return jsonify({"error": "Request body must be a JSON object"}), 400
-        scenario = str(body.get("scenario", "urban"))
-        controller = str(body.get("controller", "linear_ppo"))
+        scenario = str(body.get("scenario", "hex_cluster"))
+        controller = str(body.get("controller", "care"))
         if controller not in CONTROLLERS:
             return jsonify({"error": "Unknown controller"}), 400
         try:
-            seed_value = body.get("seed", SCENARIOS.get(scenario, SCENARIOS["urban"])["seed"])
+            seed_value = body.get("seed", SCENARIOS.get(scenario, SCENARIOS["hex_cluster"])["seed"])
             if (
                 isinstance(seed_value, bool)
                 or isinstance(seed_value, float)
@@ -509,13 +587,13 @@ def create_app() -> Flask:
             return jsonify({"error": f"Unknown scenario: {scenario}"}), 400
         if not 0 <= seed <= 2**32 - 1:
             return jsonify({"error": "Seed must be between 0 and 4294967295"}), 400
-        if controller == "linear_ppo" and not MODEL.exists():
-            return jsonify(
-                {"error": "Saved PPO model is missing; run the experiment before opening the demo"}
-            ), 503
-        if controller != "linear_ppo" and not DEEP_MODEL.exists():
+        if not DEEP_MODEL.exists():
             return jsonify(
                 {"error": "Trained neural predictor is missing; run python -m proran.neural"}
+            ), 503
+        if controller == "care" and not care_available():
+            return jsonify(
+                {"error": "Trained CARE actor is missing; run python -m proran.care_experiment"}
             ), 503
         token = secrets.token_urlsafe(12)
         with lock:
@@ -553,7 +631,7 @@ def create_app() -> Flask:
 
     @app.get("/health")
     def health():
-        return jsonify({"status": "ok", "model": MODEL.exists(), "results": RESULTS.exists()})
+        return jsonify({"status": "ok", "predictor": DEEP_MODEL.exists(), "care": care_available()})
 
     return app
 

@@ -1,0 +1,177 @@
+{
+  "python": "3.12.10",
+  "numpy": "2.2.6",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "predictor_sha256": "5c137bd24f9dde1f7faf772b1d60fa32915db30eb43da149901a8fc060ea2b11",
+  "source_sha256": "a3a657fc5774825e820678ff8f89ad7cdc1d2b892a7b60afc140a8c9f84db188",
+  "base_config": {
+    "seed": 7,
+    "n_ues": 32,
+    "cell_capacity": 60,
+    "world_size": 100.0,
+    "dt_s": 0.1,
+    "horizon": 8,
+    "episode_steps": 320,
+    "mobility_noise": 0.1,
+    "prediction_noise": 0.18,
+    "urllc_burst_prob": 0.08,
+    "reward_success": 2.0,
+    "reward_qos": 3.0,
+    "reward_waste": 1.5,
+    "reward_occupancy": 0.25,
+    "centers": null,
+    "hex_radius": null,
+    "handover_mode": "nearest",
+    "switch_margin": 0.06,
+    "time_to_trigger": 2,
+    "signal_radius": 48.0,
+    "minimum_signal": 0.35,
+    "common_radio_stream": true,
+    "prediction_mode": "kinematic",
+    "research_metrics": true,
+    "action_set": "v2",
+    "max_decisions": 32,
+    "failure_outage": 3,
+    "activation_rule": "floor_protected",
+    "sla_capped_by_demand": true,
+    "preparation_delay": 1,
+    "retime_pending": true,
+    "slices": [
+      {
+        "name": "eMBB",
+        "demand_mean": 10.5,
+        "demand_std": 3.0,
+        "sla_rbs": 7,
+        "latency_max_ms": 20.0,
+        "priority": 2,
+        "color": "#2878B5"
+      },
+      {
+        "name": "uRLLC",
+        "demand_mean": 7.0,
+        "demand_std": 2.0,
+        "sla_rbs": 5,
+        "latency_max_ms": 5.0,
+        "priority": 3,
+        "color": "#D9534F"
+      },
+      {
+        "name": "mMTC",
+        "demand_mean": 3.2,
+        "demand_std": 1.2,
+        "sla_rbs": 2,
+        "latency_max_ms": 100.0,
+        "priority": 1,
+        "color": "#45A36A"
+      }
+    ]
+  },
+  "seeds": {
+    "calibration": [
+      4100,
+      4101,
+      4102,
+      4103,
+      4104,
+      4105,
+      4106,
+      4107,
+      4108,
+      4109,
+      4110,
+      4111,
+      4112,
+      4113,
+      4114,
+      4115,
+      4116,
+      4117,
+      4118,
+      4119
+    ],
+    "tuning": [
+      5000,
+      5001,
+      5002,
+      5003,
+      5004,
+      5005,
+      5006,
+      5007,
+      5008,
+      5009
+    ],
+    "test": [
+      9000,
+      9001,
+      9002,
+      9003,
+      9004,
+      9005,
+      9006,
+      9007,
+      9008,
+      9009,
+      9010,
+      9011,
+      9012,
+      9013,
+      9014,
+      9015,
+      9016,
+      9017,
+      9018,
+      9019
+    ],
+    "care_training_base": 20000
+  },
+  "lambdas": [
+    0.25,
+    1.0,
+    4.0,
+    16.0
+  ],
+  "training_replicas": [
+    101,
+    102,
+    103
+  ],
+  "variants": {
+    "fqi": [
+      "fqi",
+      "stopping",
+      "",
+      240
+    ],
+    "ppo": [
+      "ppo",
+      "stopping",
+      "_ppo",
+      160
+    ],
+    "ppo_onpolicy": [
+      "ppo",
+      "on_policy",
+      "_ppo_onpolicy",
+      160
+    ]
+  },
+  "variant_lambdas": {
+    "fqi": [
+      0.25,
+      1.0,
+      4.0,
+      16.0
+    ],
+    "ppo": [
+      0.25,
+      1.0,
+      4.0,
+      16.0
+    ],
+    "ppo_onpolicy": [
+      1.0,
+      16.0
+    ]
+  }
+}

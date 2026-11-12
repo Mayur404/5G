@@ -23,10 +23,3 @@ results_candidate*/
 *.out
 *.toc
 *.synctex.gz
-rl_handover_pseudocode.pdf
-results/demo_*.png
-results/web-ui-*.png
-results/lab_reservation.png
-# Local planning notes and an identical backup of paper.tex.
-WORK_PLAN.md
-paper_legacy.tex

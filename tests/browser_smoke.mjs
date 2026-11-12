@@ -44,16 +44,12 @@ try{
   let ready=false;
   for(let i=0;i<30;i++){await sleep(200);ready=await evalJS("Boolean(document.querySelector('#proposedTower .ledger'))");if(ready)break;}
   assert.ok(ready,"7-cell honeycomb cluster UI did not render");
-  assert.equal(await evalJS("app.snapshot.controller_kind"),"deep_qos","The UI must default to neural prediction and QoS-aware target selection");
-  assert.match(await evalJS("document.querySelector('#decisionFacts').textContent"),/Trained MLP/);
-  // This suite verifies the preserved linear teaching traces. The default UI
-  // now opens the neural QoS controller, covered by the research UI suite.
-  await evalJS("(async()=>{document.querySelector('#controller').value='linear_ppo';await startScenario()})()");
+  assert.equal(await evalJS("app.snapshot.controller_kind"),"care","The UI must default to the proposed CARE controller");
+  assert.match(await evalJS("document.querySelector('#decisionFacts').textContent"),/CARE Q-ensemble/);
   assert.equal(await evalJS("document.querySelectorAll('canvas').length"),1,"Comparison should use one uncluttered map");
   assert.ok(await evalJS("document.querySelector('#networkCanvas').height>=500"),"Map is not large enough");
-  assert.match(await evalJS("document.querySelector('.map-heading').textContent"),/LIVE PPO NETWORK/);
+  assert.match(await evalJS("document.querySelector('.map-heading').textContent"),/LIVE CARE NETWORK/);
   assert.equal(await evalJS("document.querySelectorAll('.controls .primary').length"),1,"Playback should have one primary action");
-  assert.match(await evalJS("document.querySelector('#decisionFacts').textContent"),/Saved linear PPO/);
   assert.equal(await evalJS("document.querySelector('#statHsrNormal').textContent"),"—","No attempts must remain undefined");
   assert.equal(await evalJS("getComputedStyle(document.body).backgroundColor"),"rgb(237, 242, 248)");
   assert.equal(await evalJS("getComputedStyle(document.querySelector('.map-panel')).borderRadius"),"16px");
@@ -117,7 +113,7 @@ try{
       break;
     }
   }
-  assert.ok(hoOrHold,"Honeycomb cluster telemetry did not display proactive PPO state");
+  assert.ok(hoOrHold,"Honeycomb cluster telemetry did not display proactive CARE state");
   if(process.env.PRORAN_DESKTOP_SCREENSHOT)await screenshot(process.env.PRORAN_DESKTOP_SCREENSHOT);
   if(process.env.PRORAN_WORKSPACE_SCREENSHOT)await screenshotElement("#simulation",process.env.PRORAN_WORKSPACE_SCREENSHOT);
 
@@ -159,7 +155,7 @@ try{
   await evalJS("document.querySelector('#playBtn').click()");
 
   // Replay and switch scenarios through the actual UI. The early urban trace
-  // has a known capacity benefit and must not be invented by presentation code.
+  // has a known CARE capacity benefit and must not be invented by presentation code.
   await evalJS("document.querySelector('#scenario').value='urban'; document.querySelector('#scenario').dispatchEvent(new Event('change'))");
   for(let i=0;i<40;i++){await sleep(100);if(await evalJS("app.snapshot?.scenario==='urban'"))break;}
   assert.equal(await evalJS("app.snapshot.scenario"),"urban");
@@ -169,7 +165,7 @@ try{
   assert.equal(await evalJS("document.querySelector('#proposedOutcome').textContent"),"Admitted");
   assert.match(await evalJS("document.querySelector('#recentHandoverList').textContent"),/UE1 · C2 → C0 · admitted/);
   assert.ok(await evalJS("(()=>{drawMap(performance.now());const route=app.handoverRoutes.find(r=>r.ue===1);return route.source===2&&route.target===0&&route.clearance===34&&Math.abs(Math.hypot(route.end.x-route.targetCenter.x,route.end.y-route.targetCenter.y)-34)<1e-6})()"),"Handover arrowheads must end outside the destination tower icon");
-  assert.match(await evalJS("document.querySelector('#proposedOutcomeDetail').textContent"),/7 \/ 7 RB granted.*QoS met/);
+  assert.match(await evalJS("document.querySelector('#proposedOutcomeDetail').textContent"),/5 \/ 7 RB granted.*QoS unmet/);
   assert.equal(await evalJS("getComputedStyle(document.querySelector('#proposedOutcome')).color"),"rgb(21, 128, 61)");
   assert.equal(await evalJS("getComputedStyle(document.querySelector('#normalOutcome')).color"),"rgb(185, 28, 28)");
   assert.ok(await evalJS("(()=>{const ctx=document.querySelector('#networkCanvas').getContext('2d'),original=ctx.fillText,text=[];ctx.fillText=function(value,...args){text.push(String(value));return original.call(this,value,...args)};try{drawMap(performance.now())}finally{ctx.fillText=original}return text.some(t=>/^Handover C2 → C0 · admitted$/.test(t))})()"),"The real recent handover must be visible on the map");
@@ -285,6 +281,6 @@ try{
   assert.ok(await evalJS("(()=>{const net=app.snapshot.proposed;return net.ues.every(ue=>Math.abs(ue.signal_quality-clamp(1-Math.hypot(ue.x-net.cells[ue.cell].x,ue.y-net.cells[ue.cell].y)/app.snapshot.signal_radius,0,1))<1e-10)&&app.connectionLinks.every(link=>net.ues.find(u=>u.id===link.ue).cell===link.cell)})()"),"Neural-mode signal and links must match the actual serving tower");
   assert.ok(await evalJS("(()=>{const ctx=document.querySelector('#networkCanvas').getContext('2d'),original=ctx.fillRect,bars=[];ctx.fillRect=function(x,y,w,h){if(h===3)bars.push({color:this.fillStyle,width:w});return original.call(this,x,y,w,h)};try{drawMap(performance.now())}finally{ctx.fillRect=original}return app.snapshot.proposed.cells.every(c=>c.slices.every(s=>s.allocated===0||bars.some(b=>b.color===SLICE_COLORS[s.name]&&b.width>0)))})()"),"Tower allocation bars must display actual slice colors");
   if(process.env.PRORAN_DEEP_SCREENSHOT)await screenshotElement('#simulation',process.env.PRORAN_DEEP_SCREENSHOT);
-  console.log("Browser smoke passed: deep and legacy controllers, slice colors, four scenarios, geometry, pause race, seven viewports, inspector tabs, expanded map, cursor anchoring and touch pinch/pan.");
+  console.log("Browser smoke passed: CARE and forecast-rule controllers, slice colors, four scenarios, geometry, pause race, seven viewports, inspector tabs, expanded map, cursor anchoring and touch pinch/pan.");
   await send("Browser.close").catch(()=>{});
 }finally{socket?.close();child.kill();}

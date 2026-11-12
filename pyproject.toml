@@ -5,16 +5,13 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "proran"
 version = "1.0.0"
-description = "Uncertainty-aware proactive reservation for sliced 5G RAN handovers"
+description = "CARE: calibrated, attribution-rewarded proactive reservation for sliced 5G RAN handovers"
 requires-python = ">=3.10"
-dependencies = ["numpy", "matplotlib", "rich"]
+dependencies = ["numpy", "matplotlib"]
 
 [project.optional-dependencies]
 web = ["Flask>=3.1,<4", "waitress>=3,<4"]
 dev = ["pytest>=8,<9", "ruff==0.14.0"]
-
-[project.scripts]
-proran = "proran.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -29,8 +26,3 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I"]
-
-[tool.ruff.lint.per-file-ignores]
-"src/proran/plotting.py" = ["E402"]
-"src/proran/research_report.py" = ["E402"]
-"web/research_report.py" = ["E402"]

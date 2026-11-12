@@ -5,7 +5,8 @@ const setText = (id, value) => {
   const el = $(id);
   if (el) el.textContent = value;
 };
-const STEP_MS = 750;
+const BASE_STEP_MS = 750;
+let STEP_MS = BASE_STEP_MS;
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 const FONT_FAMILY = getComputedStyle(document.body).fontFamily;
 const MAP_FONT = "12px " + FONT_FAMILY;
@@ -13,7 +14,7 @@ const MIN_ZOOM = .5, MAX_ZOOM = 8;
 const COLORS = {allocated:"#2563eb", held:"#b45309", free:"#dbeafe", strong:"#15803d", fair:"#b45309", weak:"#dc2626"};
 const CELL_FILLS = ["#e0edff", "#e8f7ee", "#f3eaff", "#fff2dc", "#e0f5f5", "#ffe9ee", "#eef1ff"];
 const SLICE_COLORS={eMBB:"#8b5cf6",uRLLC:"#2563eb",mMTC:"#0d9da5"};
-const policyLabel=()=>app.snapshot?.controller_kind==="linear_ppo"?"PPO":"Neural";
+const policyLabel=()=>app.snapshot?.controller_kind==="care"?"CARE":"Rule";
 function signalState(ue) {
   const quality = clamp(ue.signal_quality, 0, 1);
   const level = quality >= .7 ? "strong" : quality >= .4 ? "fair" : "weak";
@@ -229,6 +230,7 @@ function drawMapLabels(ctx, labels, obstacles, width, height, keepHits=false) {
   // Reserve the screen controls as obstacles as well as map objects.
   const controls=app.controlsHorizontal?{left:0,right:width,top:0,bottom:52}:{left:width-70,right:width,top:0,bottom:230};
   const occupied = [...obstacles,controls,{left:0,right:100,top:height-34,bottom:height}];
+  if(app.scoreboardBox)occupied.push(app.scoreboardBox);
   if(!app.controlsHorizontal)occupied.push({left:0,right:220,top:0,bottom:42});
   if(!keepHits)app.labelHits=[];
   for (const label of labels) {
@@ -304,6 +306,9 @@ function drawMap(now) {
     app.view.cx = oldUE ? oldUE.x + (selected.x - oldUE.x) * alpha : selected.x;
     app.view.cy = oldUE ? oldUE.y + (selected.y - oldUE.y) * alpha : selected.y;
   }
+  const board=$("mapScoreboard"),fitSide=Math.min(width-44,height-50),roomy=(width-fitSide)/2>278&&height>330&&!app.controlsHorizontal;
+  if(board&&board.hidden===roomy)board.hidden=!roomy;
+  app.scoreboardBox=roomy?{left:0,right:278,top:30,bottom:44+board.offsetHeight+6}:null;
   const p = projection(width, height), key = JSON.stringify([network.cells.map(c => [c.x,c.y]),app.snapshot.cell_polygons,world]);
   const scaleTarget=80*world/p.side,scalePower=10**Math.floor(Math.log10(scaleTarget));
   const scaleUnits=[1,2,5,10].map(n=>n*scalePower).reduce((best,n)=>Math.abs(n-scaleTarget)<Math.abs(best-scaleTarget)?n:best,scalePower);
@@ -366,6 +371,16 @@ function drawMap(now) {
     ctx.lineWidth=isSelected?2.5:1.25;
     ctx.setLineDash(ue.allocated>0?[]:[3,4]);
     ctx.beginPath();ctx.moveTo(start.x,start.y);ctx.lineTo(point.x,point.y);ctx.stroke();
+  }
+  ctx.globalAlpha=1;ctx.setLineDash([]);
+  // Every live reservation: a dashed amber path from the device to the cell
+  // holding (stronger) or about to hold (fainter) its capacity.
+  for(const contract of network.contracts) {
+    if(contract.ue===selectedId)continue;
+    const point=app.renderPoints.get(contract.ue),target=network.cells.find(c=>c.id===contract.target);
+    if(!point||!target)continue;
+    ctx.strokeStyle="#f59e0b";ctx.globalAlpha=contract.active?.85:.45;ctx.lineWidth=contract.active?1.8:1.2;ctx.setLineDash([5,4]);
+    ctx.beginPath();ctx.moveTo(point.x,point.y);ctx.lineTo(p.x(target.x),p.y(target.y));ctx.stroke();
   }
   ctx.globalAlpha=1;ctx.setLineDash([]);
   if(selected) {
@@ -431,17 +446,31 @@ function drawMap(now) {
     ctx.save();
     ctx.globalAlpha=isSelected?1:.85;
     ctx.fillStyle="#ffffffe8";
-    ctx.strokeStyle=isSelected?signalState(ue).color:"#b8cce3";
-    ctx.lineWidth=isSelected?2:1;
-    const iconScale=isSelected?1:clamp(app.view.zoom,.65,1);
+    const sliceColor=SLICE_COLORS[ue.slice]||"#b8cce3";
+    ctx.strokeStyle=sliceColor;
+    ctx.lineWidth=isSelected?3.5:2.25;
+    const crowd=network.ues.length>16?.78:1;
+    const iconScale=isSelected?1:clamp(app.view.zoom,.65,1)*crowd;
     const radius=isSelected?25:21*iconScale;
+    if(isSelected) {
+      ctx.save();ctx.strokeStyle="#93c5fd";ctx.lineWidth=5;ctx.globalAlpha=.55;
+      ctx.beginPath();ctx.arc(point.x,point.y,radius+5,0,Math.PI*2);ctx.stroke();ctx.restore();
+    }
     const crossing=[...app.visibleHandovers].reverse().find(event=>event.ue===ue.id);
     if(crossing) {
       ctx.strokeStyle=crossing.success?COLORS.strong:COLORS.weak;
       ctx.lineWidth=2.5;
       ctx.globalAlpha=.65;
       ctx.beginPath();ctx.arc(point.x,point.y,radius+6,0,Math.PI*2);ctx.stroke();
-      ctx.globalAlpha=isSelected?1:.85;ctx.strokeStyle=signalState(ue).color;ctx.lineWidth=isSelected?2:1;
+      ctx.globalAlpha=isSelected?1:.85;ctx.strokeStyle=sliceColor;ctx.lineWidth=isSelected?3.5:2.25;
+    }else if(!isSelected) {
+      // Background handovers: a short expanding pulse, green admitted, red blocked.
+      const event=(network.recent_handovers||[]).findLast(e=>e.ue===ue.id);
+      const age=event?network.step-event.step+(app.playing?elapsed:1):Infinity;
+      if(age>=0&&age<1.6) {
+        ctx.save();ctx.strokeStyle=event.success?COLORS.strong:COLORS.weak;ctx.lineWidth=3;ctx.globalAlpha=.8*(1-age/1.6);
+        ctx.beginPath();ctx.arc(point.x,point.y,radius+4+age*14,0,Math.PI*2);ctx.stroke();ctx.restore();
+      }
     }
     ctx.shadowColor="#234a7420";ctx.shadowBlur=6;ctx.shadowOffsetY=2;
     ctx.beginPath();
@@ -451,7 +480,7 @@ function drawMap(now) {
     ctx.shadowColor="transparent";
     const icon=icons[ue.entity_type];
     if(icon?.complete&&icon.naturalWidth) {
-      const size=isSelected?43:36*iconScale;
+      const size=isSelected?41:34*iconScale;
       ctx.drawImage(icon,point.x-size/2,point.y-size/2,size,size);
       ctx.filter="none";
     }
@@ -766,29 +795,31 @@ function renderTeaching() {
   setText("outcomeNote",outcome?"Crossing at "+outcome.time.toFixed(1)+" s · C"+outcome.proposed.source+" → C"+outcome.proposed.target+". Current allocation above may change in later intervals.":"Admission and full-demand QoS are separate checks.");
   const decision=network.decision,decisionFacts=$("decisionFacts");
   decisionFacts.replaceChildren();
-  for(const text of [snapshot.controller_kind==="linear_ppo"?"Saved linear PPO":"Trained MLP · 35–64–32–24",snapshot.controller_kind==="linear_ppo"?"Masked action probabilities":"Fixed reservation rule · not neural action probabilities","One candidate per interval",decision?.ue!=null?"Decision for UE"+decision.ue:"No forecast candidate"]) {
+  const kind=snapshot.controller_kind,care=kind==="care";
+  for(const text of [care?"CARE Q-ensemble · 3 × 17–64–64–10 MLP":"Forecast MLP · 35–64–32–24 · "+(kind==="deep_qos"?"QoS-aware target":"nearest target"),care?"Expected net RB value per action · greedy":"Fixed reservation rule · not neural action probabilities",care?(decision?.candidates??0)+" forecast devices · "+(decision?.committed??0)+" new holds":"One candidate per interval",decision?.ue!=null?"Decision for UE"+decision.ue:"No forecast candidate"]) {
     const span=document.createElement("span");
     span.textContent=text;
     decisionFacts.append(span);
   }
   if(decision?.ue!=null) {
     setText("decisionHeading",decision.action?"Reserve "+decision.amount_rbs+" RB at C"+decision.target:"No reservation for UE"+decision.ue);
-    setText("decisionText","Last interval: UE"+decision.ue+" → C"+decision.target+"; ETA "+decision.eta_s.toFixed(1)+" s; heuristic forecast score "+pct(decision.probability)+". "+(decision.action?"Activation delay "+decision.delay_s.toFixed(1)+" s.":"The policy selected no hold."));
+    setText("decisionText","Last interval: UE"+decision.ue+" → C"+decision.target+"; ETA "+decision.eta_s.toFixed(1)+" s; "+(care?"calibrated target confidence ":"heuristic forecast score ")+pct(decision.probability)+". "+(decision.action?"Activation delay "+decision.delay_s.toFixed(1)+" s.":care?"CARE waits; it can still commit at a later interval.":"The policy selected no hold."));
   }else {
     setText("decisionHeading","No eligible forecast this interval");
     setText("decisionText","The policy takes no action. Devices continue moving and generating traffic.");
   }
   const distribution=$("policyDistribution");
   distribution.replaceChildren();
+  const scale=Math.max(1e-9,...(decision?.distribution||[]).map(a=>Math.abs(a.value??0)));
   for(const action of decision?.distribution||[]) {
-    const row=document.createElement("div");
-    row.className="policy-row"+(action.action===decision.action?" chosen":"");
+    const row=document.createElement("div"),isValue=action.value!=null;
+    row.className="policy-row"+(action.action===decision.action?" chosen":"")+(isValue&&action.value<0?" negative":"");
     const label=document.createElement("span");
     label.textContent=action.label+(action.action===decision.action?" · chosen":"");
     const val=document.createElement("b");
-    val.textContent=pct(action.probability);
+    val.textContent=isValue?(action.value>=0?"+":"−")+Math.abs(action.value).toFixed(1)+" RB":pct(action.probability);
     const bar=document.createElement("i"),fill=document.createElement("em");
-    fill.style.width=(action.probability*100)+"%";
+    fill.style.width=(isValue?Math.abs(action.value)/scale*100:action.probability*100)+"%";
     bar.append(fill);
     row.append(label,val,bar);
     distribution.append(row);
@@ -798,6 +829,12 @@ function renderMetrics() {
   const {
     normal,proposed
   }=app.snapshot,n=normal.metrics,p=proposed.metrics;
+  setText("scoreLabel",policyLabel().toUpperCase());
+  setText("scoreHsrP",pct(p.handover_success_rate));
+  setText("scoreHsrN",pct(n.handover_success_rate));
+  setText("scoreBlockedP",String(p.handovers-p.successes));
+  setText("scoreBlockedN",String(n.handovers-n.successes));
+  setText("scoreHeldP",String(proposed.cells.reduce((sum,c)=>sum+c.reserved,0)));
   setText("statHsrNormal",pct(n.handover_success_rate));
   setText("statHsrProposed",pct(p.handover_success_rate));
   setText("statHsrDelta",delta(n.handover_success_rate,p.handover_success_rate));
@@ -860,11 +897,11 @@ function setupSparklineScrubbers() {
       line.removeAttribute("hidden");
       line.setAttribute("x1",point.x);
       line.setAttribute("x2",point.x);
-      tooltip.textContent="t="+point.time.toFixed(1)+" s · PPO "+pct(point.val)+" · baseline "+pct(baseline?.val);
+      tooltip.textContent="t="+point.time.toFixed(1)+" s · "+policyLabel()+" "+pct(point.val)+" · baseline "+pct(baseline?.val);
     });
     svg.addEventListener("pointerleave",()=> {
       line.setAttribute("hidden","");
-      tooltip.textContent="Solid PPO · dashed no reservation · cumulative rate";
+      tooltip.textContent="Solid "+policyLabel()+" · dashed no reservation · cumulative rate";
     });
   }
 }
@@ -899,9 +936,9 @@ function acceptSnapshot(snapshot) {
   app.dirty=true;
   setText("simTime",snapshot.proposed.time.toFixed(1)+" s");
   setText("mapEyebrow","LIVE "+policyLabel().toUpperCase()+" NETWORK · "+snapshot.proposed.cells.length+" CELLS / "+snapshot.proposed.ues.length+" DEVICES");
-  setText("activeControllerLabel",snapshot.controller_kind==="linear_ppo"?"Linear PPO":"Deep forecast");
+  setText("activeControllerLabel",snapshot.controller_kind==="care"?"CARE":"Forecast rule");
   document.querySelector('.inspector-badge').textContent=policyLabel();
-  for(const el of document.querySelectorAll('.outcome-tag,.stat-compare small,.stat-metric-row small'))if(/PPO|NEURAL/.test(el.textContent))el.textContent=policyLabel().toUpperCase()+" RESERVATION";
+  for(const el of document.querySelectorAll('.outcome-tag,.stat-compare small,.stat-metric-row small'))if(/^(CARE|RULE) RESERVATION$/.test(el.textContent.trim()))el.textContent=policyLabel().toUpperCase()+" RESERVATION";
   const freshHandovers={};
   for(const name of ["normal","proposed"])freshHandovers[name]=(snapshot[name].recent_handovers||snapshot[name].handover_details||[]).filter(event=>{
     const key=name+":"+(event.step??snapshot[name].step)+":"+event.ue;
@@ -1212,14 +1249,24 @@ async function init() {
   $("restartBtn").addEventListener("click",startScenario);
   $("deviceSelect").addEventListener("change",()=>selectUE(Number($("deviceSelect").value)));
   $("controller").addEventListener("change",startScenario);
+  $("speed").addEventListener("change",()=>{
+    const speed=Number($("speed").value)||1,progress=app.playing?clamp((performance.now()-app.frameStart)/STEP_MS,0,1):app.pausedProgress;
+    STEP_MS=BASE_STEP_MS/speed;
+    app.frameStart=performance.now()-progress*STEP_MS;
+    setText("playbackNote","Each simulation interval = 0.1 s · playback "+speed+"×");
+  });
   $("eventFilter").addEventListener("change",renderEvents);
   requestAnimationFrame(frame);
   try {
     const meta=await requestJSON("/api/meta");
     app.scenarios=meta.scenarios;
-    const baseline=meta.published?.metrics?.find(m=>m.method==="No reservation"),ppo=meta.published?.metrics?.find(m=>m.method?.includes("PPO"));
-    setText("benchmarkStat",baseline&&ppo?pct(ppo.handover_success_rate)+" vs "+pct(baseline.handover_success_rate):"Unavailable");
-    for(const profile of meta.published?.simulation?.slices||[]) {
+    const careRow=meta.care_summary?.find(m=>m.method==="CARE"),careBase=meta.care_summary?.find(m=>m.method==="No reservation");
+    if(careRow&&careBase) {
+      setText("benchmarkStat",pct(careRow.handover_success_rate)+" vs "+pct(careBase.handover_success_rate));
+      setText("benchmarkCaption","CARE vs no reservation · 20 held-out seeds");
+    }else setText("benchmarkStat","Unavailable");
+    if(!meta.care_available)$("controller").querySelector('option[value="care"]')?.setAttribute("disabled","");
+    for(const profile of meta.slices||[]) {
       const card=document.createElement("article"),title=document.createElement("h3"),text=document.createElement("p");
       title.textContent=profile.name;
       text.textContent="Minimum "+profile.sla_rbs+" RB per device · latency ≤ "+profile.latency_max_ms+" ms · priority "+profile.priority;

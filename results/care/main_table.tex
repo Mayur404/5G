@@ -1,0 +1,19 @@
+\begin{tabular}{lrrrrrrr}
+\toprule
+Method & HSR & QoS & Outage & Full & Served & Displ. & $U_{1}$\\
+\midrule
+No reservation & 51.6 & 45.3 & 5.42 & 75.3 & 79.9 & 0.00 & 0.00\\
+Reactive & 83.5 & 66.2 & 1.87 & 74.1 & 80.1 & 1.22 & 10.71\\
+Certainty-equivalent & 83.1 & 61.4 & 1.91 & 66.3 & 74.3 & 7.47 & -0.18\\
+Fixed proactive & 84.5 & 67.0 & 1.76 & 74.0 & 80.0 & 1.39 & 10.74\\
+Floor-JIT & 87.8 & 50.9 & 1.38 & 74.2 & 80.4 & 0.87 & 12.56\\
+Tuned rule & 87.8 & 50.9 & 1.38 & 74.2 & 80.4 & 0.85 & 12.59\\
+Slice-tuned rule & \textbf{87.9} & 51.0 & 1.37 & 74.3 & 80.4 & 0.84 & 12.65\\
+\textbf{CARE (proposed)} & 87.4 & 51.7 & 1.42 & 74.2 & 80.3 & 0.92 & 12.38\\
+\midrule
+CARE w/o calibration & 84.2 & 52.2 & 1.78 & 74.2 & 80.3 & 0.90 & 12.15\\
+CARE single network & 87.5 & 51.8 & 1.41 & 74.1 & 80.3 & 0.99 & 12.40\\
+CARE-PPO & 87.8 & 50.9 & 1.38 & 74.2 & 80.4 & 0.87 & 12.56\\
+CARE-PPO w/ on-policy wait & 87.8 & 50.9 & 1.38 & 74.2 & 80.4 & 0.87 & 12.56\\
+\bottomrule
+\end{tabular}
