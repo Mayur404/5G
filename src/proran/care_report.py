@@ -852,6 +852,13 @@ def _write_macros(
     by_lead = {r["lead"]: r for r in calibration["by_lead"]}
     macro("CalAccLeadOne", _fmt(100 * by_lead[1]["accuracy"]))
     macro("CalAccLeadEight", _fmt(100 * by_lead[8]["accuracy"]))
+    forecaster = Path(path).parent.parent / "deep" / "training_metadata.json"
+    if forecaster.exists():
+        meta = json.loads(forecaster.read_text(encoding="utf-8"))
+        macro("ForecastPosRMSE", f"{meta['validation']['position_rmse_world_units']:.2f}")
+        macro("ForecastDemandMAE", f"{meta['validation']['demand_mae_rbs']:.2f}")
+        macro("ForecastScore", f"{meta['validation']['forecast_score']:.2f}")
+        macro("ForecastTrainExamples", f"{meta['training_examples']:,}".replace(",", "{,}"))
 
     def describe(spec) -> str:
         if spec is None:

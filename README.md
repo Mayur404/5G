@@ -8,7 +8,7 @@ When a device moves into a busy cell, it may not get the resource blocks (RBs) i
 2. **Per-reservation counterfactual reward.** Each hold is credited only if it turned a failed admission into a success, and charged for exactly the incumbent RBs it displaced, at an operator price λ.
 3. **Optimal-stopping learner.** Fitted Q iteration with a three-network ensemble learns when to wait and when to commit.
 
-The full study is in [paper.pdf](paper.pdf) (source: [paper.tex](paper.tex)).
+The full study is in [paper/main.pdf](paper/main.pdf) (IEEE conference format; LaTeX source in [paper/](paper/)). Step-by-step reproduction instructions are in [REPRODUCE.md](REPRODUCE.md).
 
 ## Headline results (20 held-out seeds, λ = 1)
 
@@ -79,7 +79,7 @@ A recorded, captioned demo (94 s) is in [results/demo/care_demo.mp4](results/dem
 ## Verify everything
 
 ```sh
-python -m pytest -q                       # 106 unit, integration and paper-traceability tests
+python -m pytest -q                       # 107 unit, integration and paper-traceability tests
 python -m ruff check src web tests
 python -m ruff format --check src web tests
 python -m compileall -q src web
@@ -112,13 +112,15 @@ Seed roles never overlap:
 | Rule tuning and replica selection | 5000–5009 |
 | Held-out test | 9000–9019 |
 
-Outputs go to `results/care/`. Every number in `paper.tex` is a macro from `results/care/paper_macros.tex`, and a test checks this. The neural forecaster can be retrained with `python -m proran.neural` (writes `results/deep/`).
+Outputs go to `results/care/`. `python scripts/build_submission.py sync` copies the tables, figures and macros into `paper/`. Every number in `paper/main.tex` is a macro from `paper_macros.tex`, and tests check this and that `paper/` matches `results/care/`. The neural forecaster can be retrained with `python -m proran.neural` (writes `results/deep/`).
 
-Compile the paper (TeX Live, MiKTeX or Tectonic with IEEEtran):
+Compile the paper (pdflatex + bibtex, or Tectonic) and build the submission zips:
 
 ```sh
-pdflatex paper && bibtex paper && pdflatex paper && pdflatex paper
+python scripts/build_submission.py pdf package   # writes paper/main.pdf, dist/Overleaf_Source.zip, dist/CARE_Final_Submission.zip
 ```
+
+On Overleaf, upload `dist/Overleaf_Source.zip` as a new project.
 
 ## Project layout
 
@@ -137,7 +139,10 @@ pdflatex paper && bibtex paper && pdflatex paper && pdflatex paper
 | `results/deep/` | Trained forecaster and its training record |
 | `results/demo/` | Demo video and screenshots |
 | `docs/` | Original problem statement, project brief and the PreNS reference paper |
-| `paper.tex`, `paper.pdf`, `references.bib` | Final IEEE-style paper |
+| `paper/` | Final IEEE conference paper: `main.tex`, `main.pdf`, `references.bib`, figures, generated tables and macros |
+| `scripts/build_submission.py` | Sync results into the paper, compile it, package the submission |
+| `revision_reports/` | Deep Review comments and revision log |
+| `REPRODUCE.md` | Install, data, seeds, settings and exact commands for every result |
 
 ## Container
 

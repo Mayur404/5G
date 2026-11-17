@@ -23,3 +23,4 @@ results_candidate*/
 *.out
 *.toc
 *.synctex.gz
+dist/

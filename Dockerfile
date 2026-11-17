@@ -10,7 +10,7 @@ WORKDIR /app
 COPY requirements-web.txt ./
 COPY src ./src
 COPY web ./web
-COPY paper.tex paper.pdf references.bib ./
+COPY paper/main.tex paper/main.pdf paper/references.bib ./paper/
 COPY results/deep/predictor.npz ./results/deep/
 COPY results/care/calibrator.npz results/care/tuning.json results/care/summary.csv ./results/care/
 COPY results/care/models/*.npz ./results/care/models/

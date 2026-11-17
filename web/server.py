@@ -519,15 +519,15 @@ def create_app() -> Flask:
 
     @app.get("/paper.tex")
     def manuscript():
-        return send_from_directory(ROOT, "paper.tex", mimetype="text/plain")
+        return send_from_directory(ROOT / "paper", "main.tex", mimetype="text/plain")
 
     @app.get("/paper.pdf")
     def manuscript_pdf():
-        return send_from_directory(ROOT, "paper.pdf", mimetype="application/pdf")
+        return send_from_directory(ROOT / "paper", "main.pdf", mimetype="application/pdf")
 
     @app.get("/references.bib")
     def bibliography():
-        return send_from_directory(ROOT, "references.bib", mimetype="text/plain")
+        return send_from_directory(ROOT / "paper", "references.bib", mimetype="text/plain")
 
     @app.get("/api/meta")
     def meta():
