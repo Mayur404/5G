@@ -226,6 +226,62 @@ def _style(ax):
     ax.tick_params(labelsize=7.5)
 
 
+def fig_headline(rows: list[dict], path: Path) -> None:
+    """Handover admission by slice and outage, main setting (lambda = 1)."""
+    # Gray baseline first; blue CARE sits between orange and green so that no
+    # adjacent pair is confusable under color-vision deficiency.
+    methods = ("No reservation", "Reactive", "CARE", "Slice-tuned rule")
+    groups = (
+        ("eMBB", "embb_handover_success_rate"),
+        ("uRLLC", "urllc_handover_success_rate"),
+        ("mMTC", "mmtc_handover_success_rate"),
+        ("All", "handover_success_rate"),
+    )
+    fig, (left, right) = plt.subplots(
+        1, 2, figsize=(7.0, 2.45), gridspec_kw={"width_ratios": [3.0, 1.45]}
+    )
+    width = 0.2
+    x = np.arange(len(groups))
+    for i, method in enumerate(methods):
+        selected = _select(rows, method)
+        stats = [mean_ci([100 * r[key] for r in selected]) for _, key in groups]
+        left.bar(
+            x + (i - 1.5) * width,
+            [m for m, _ in stats],
+            width=width - 0.03,
+            yerr=[c for _, c in stats],
+            color=COLORS[method],
+            ecolor="#52514e",
+            error_kw={"elinewidth": 0.7, "capsize": 1.5},
+            label=method,
+        )
+    left.set_xticks(x, [g for g, _ in groups])
+    left.set_ylabel("Handover admission (%)", fontsize=8)
+    left.set_ylim(0, 100)
+    left.legend(fontsize=6.8, frameon=False, ncol=4, loc="lower center", bbox_to_anchor=(0.62, 1.0))
+    _style(left)
+    outage = [mean_ci([100 * r["outage_fraction"] for r in _select(rows, m)]) for m in methods]
+    right.bar(
+        np.arange(len(methods)),
+        [m for m, _ in outage],
+        width=0.62,
+        yerr=[c for _, c in outage],
+        color=[COLORS[m] for m in methods],
+        ecolor="#52514e",
+        error_kw={"elinewidth": 0.7, "capsize": 1.5},
+    )
+    for i, (m, c) in enumerate(outage):
+        right.text(i, m + c + 0.12, f"{m:.1f}", ha="center", fontsize=6.8, color="#2b2b29")
+    right.set_xticks(np.arange(len(methods)), ["None", "Reac-\ntive", "CARE", "Slice-\ntuned"])
+    right.set_ylabel("Outage (% of UE-intervals)", fontsize=8)
+    _style(right)
+    right.tick_params(axis="x", labelsize=6.8)
+    fig.tight_layout()
+    fig.savefig(path.with_suffix(".pdf"))
+    fig.savefig(path.with_suffix(".png"), dpi=200)
+    plt.close(fig)
+
+
 def fig_calibration(calibration: dict, path: Path) -> None:
     fig, (left, right) = plt.subplots(1, 2, figsize=(7.0, 2.6))
     bins = [b for b in calibration["calibrated"]["bins"] if b["count"] >= 20]
@@ -569,6 +625,7 @@ def build_report(directory: Path) -> None:
                     "hold_share": hold_share(selected),
                     "hsr": mean_ci([r["handover_success_rate"] for r in selected])[0],
                     "displaced": mean_ci([r["displaced_rb_fraction"] for r in selected])[0],
+                    "contracts": mean_ci([r["contracts"] for r in selected])[0],
                 }
             )
     with (directory / "frontier_points.csv").open("w", newline="", encoding="utf-8") as fh:
@@ -669,6 +726,7 @@ def build_report(directory: Path) -> None:
         action_shares[name] = (counts / max(1, counts.sum())).tolist()
 
     fig_calibration(calibration, figures / "calibration")
+    fig_headline(rows, figures / "headline")
     fig_tradeoff(table, figures / "tradeoff")
     fig_frontier(frontier, figures / "frontier")
     fig_sweeps(sweeps, figures / "sweeps")
@@ -878,6 +936,7 @@ def _write_macros(
         macro(stem + "Hold", _fmt(100 * point["hold_share"]))
         macro(stem + "HSR", _fmt(100 * point["hsr"]))
         macro(stem + "Displaced", _fmt(100 * point["displaced"], 2))
+        macro(stem + "Contracts", _fmt(point["contracts"], 1))
     for name, shares in action_shares.items():
         tag = {"eMBB": "EMBB", "uRLLC": "URLLC", "mMTC": "MMTC"}[name]
         macro(f"CareWait{tag}", _fmt(100 * shares[0]))

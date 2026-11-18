@@ -89,12 +89,13 @@ This rewrites `results/care/{summary,paired,frontier,sweeps}.csv`, `main_table.t
 | --- | --- | --- |
 | Fig. 1 (scenario), Fig. 2 (pipeline), Algorithms 1–2 | drawn in LaTeX (TikZ) | `paper/main.tex` |
 | Fig. 3 (calibration) | `care_report.fig_calibration` | `figures/calibration.pdf` |
-| Fig. 4 (trade-off) | `care_report.fig_tradeoff` | `figures/tradeoff.pdf` |
-| Fig. 5 (price response) | `care_report.fig_frontier` | `figures/frontier.pdf` |
-| Fig. 6 (training curves) | `care_report.fig_training` | `figures/training.pdf` |
-| Fig. 7 (learned policy) | `care_report.fig_policy` | `figures/policy.pdf` |
-| Fig. 8 (sensitivity) | `care_report.fig_sweeps` | `figures/sweeps.pdf` |
-| Fig. 9 (web lab) | screenshot of `python -m web.server` | `figures/handover_rescue.jpg` |
+| Fig. 4 (main result by slice, outage) | `care_report.fig_headline` | `figures/headline.pdf` |
+| Fig. 5 (trade-off) | `care_report.fig_tradeoff` | `figures/tradeoff.pdf` |
+| Fig. 6 (price response) | `care_report.fig_frontier` | `figures/frontier.pdf` |
+| Fig. 7 (training curves) | `care_report.fig_training` | `figures/training.pdf` |
+| Fig. 8 (learned policy) | `care_report.fig_policy` | `figures/policy.pdf` |
+| Fig. 9 (sensitivity) | `care_report.fig_sweeps` | `figures/sweeps.pdf` |
+| Fig. 10 (web lab) | screenshot of `python -m web.server` | `figures/handover_rescue.jpg` |
 | Table IV (main results) | `care_report` | `generated/main_table.tex` |
 | Table V (price response) | `care_report` | `generated/frontier_table.tex` |
 | Every number in the text | `care_report._write_macros` | `generated/paper_macros.tex` |
@@ -121,7 +122,9 @@ The stages can also be run one at a time: `calibrate`, `train`, `tune`, `evaluat
 - `train` trains, for each price λ ∈ {0.25, 1, 4, 16} and replica seed ∈ {101, 102, 103}: CARE (fitted Q, 240 episodes), CARE-PPO (160 episodes), CARE without calibration (λ = 1), and CARE-PPO with on-policy wait (λ ∈ {1, 16}) → `results/care/models/`.
 - `tune`, `evaluate` and `report` are as above.
 
-Retraining reproduces the reported numbers exactly on the same platform and library versions (NumPy 2.2.6, Python 3.12). On other BLAS builds, floating-point summation order can differ slightly, which changes trained weights and therefore small digits of the results.
+**Verified end to end (18 Nov 2026):** a fresh clone from GitHub, a new virtual environment and `python -m proran.care_experiment` (46 min 47 s on 16 threads) reproduced the calibrator, all 33 trained models (byte-identical), the tuning choices, all 1,380 held-out runs, the statistics, tables and every paper macro exactly. Only the wall-clock `seconds` column differs. Retraining the forecaster (`python -m proran.neural`, 38 s) gives weights within 3×10⁻¹⁵ of the shipped ones (floating-point round-off) and the same validation metrics. The pipeline always uses the shipped forecaster, `results/deep/predictor.npz`.
+
+On other platforms or BLAS builds, floating-point summation order can differ slightly, which changes trained weights and can therefore change small digits of the results.
 
 ## 8. Main settings and baseline configurations
 

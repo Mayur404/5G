@@ -1567,7 +1567,8 @@
       "ci": 1.4776038423685647,
       "hold_share": 1.0,
       "hsr": 0.8776976142479427,
-      "displaced": 0.00869140625
+      "displaced": 0.00869140625,
+      "contracts": 303.6
     },
     {
       "method": "Tuned rule",
@@ -1576,7 +1577,8 @@
       "ci": 1.4308432485479567,
       "hold_share": 1.0,
       "hsr": 0.8839904775251439,
-      "displaced": 0.056178385416666664
+      "displaced": 0.056178385416666664,
+      "contracts": 437.9
     },
     {
       "method": "Slice-tuned rule",
@@ -1585,7 +1587,8 @@
       "ci": 1.3855151185007368,
       "hold_share": 0.7118486614306224,
       "hsr": 0.8678275778334671,
-      "displaced": 0.054412109374999997
+      "displaced": 0.054412109374999997,
+      "contracts": 421.45
     },
     {
       "method": "CARE",
@@ -1594,7 +1597,8 @@
       "ci": 1.4785152761589757,
       "hold_share": 0.2370153621068032,
       "hsr": 0.8738623956141417,
-      "displaced": 0.011545572916666667
+      "displaced": 0.011545572916666667,
+      "contracts": 275.4
     },
     {
       "method": "CARE single network",
@@ -1603,7 +1607,8 @@
       "ci": 1.4890005917779088,
       "hold_share": 0.4923777961888981,
       "hsr": 0.8702346357244458,
-      "displaced": 0.01588997395833333
+      "displaced": 0.01588997395833333,
+      "contracts": 297.15
     },
     {
       "method": "CARE-PPO",
@@ -1612,7 +1617,8 @@
       "ci": 1.4776038423685647,
       "hold_share": 1.0,
       "hsr": 0.8776976142479427,
-      "displaced": 0.00869140625
+      "displaced": 0.00869140625,
+      "contracts": 303.6
     },
     {
       "method": "Floor-JIT",
@@ -1621,7 +1627,8 @@
       "ci": 1.3279661235720304,
       "hold_share": 1.0,
       "hsr": 0.8776976142479427,
-      "displaced": 0.00869140625
+      "displaced": 0.00869140625,
+      "contracts": 303.6
     },
     {
       "method": "Tuned rule",
@@ -1630,7 +1637,8 @@
       "ci": 1.3316940363970498,
       "hold_share": 0.4078463424601553,
       "hsr": 0.8777527451050592,
-      "displaced": 0.008460937499999998
+      "displaced": 0.008460937499999998,
+      "contracts": 299.4
     },
     {
       "method": "Slice-tuned rule",
@@ -1639,7 +1647,8 @@
       "ci": 1.326988240557032,
       "hold_share": 0.3215519102093676,
       "hsr": 0.8786305207049031,
-      "displaced": 0.008386067708333333
+      "displaced": 0.008386067708333333,
+      "contracts": 297.95
     },
     {
       "method": "CARE",
@@ -1648,7 +1657,8 @@
       "ci": 1.3287256161271739,
       "hold_share": 0.26461272674920816,
       "hsr": 0.8744816508185129,
-      "displaced": 0.009222005208333333
+      "displaced": 0.009222005208333333,
+      "contracts": 275.7
     },
     {
       "method": "CARE single network",
@@ -1657,7 +1667,8 @@
       "ci": 1.3035500034296934,
       "hold_share": 0.6541883680555556,
       "hsr": 0.8754264675825436,
-      "displaced": 0.009874348958333333
+      "displaced": 0.009874348958333333,
+      "contracts": 301.45
     },
     {
       "method": "CARE-PPO",
@@ -1666,7 +1677,8 @@
       "ci": 1.3279661235720304,
       "hold_share": 1.0,
       "hsr": 0.8776976142479427,
-      "displaced": 0.00869140625
+      "displaced": 0.00869140625,
+      "contracts": 303.6
     },
     {
       "method": "CARE-PPO w/ on-policy wait",
@@ -1675,7 +1687,8 @@
       "ci": 1.3279661235720304,
       "hold_share": 1.0,
       "hsr": 0.8776976142479427,
-      "displaced": 0.00869140625
+      "displaced": 0.00869140625,
+      "contracts": 303.6
     },
     {
       "method": "Floor-JIT",
@@ -1684,7 +1697,8 @@
       "ci": 0.7791779619006396,
       "hold_share": 1.0,
       "hsr": 0.8776976142479427,
-      "displaced": 0.00869140625
+      "displaced": 0.00869140625,
+      "contracts": 303.6
     },
     {
       "method": "Tuned rule",
@@ -1693,7 +1707,8 @@
       "ci": 0.7935983889619553,
       "hold_share": 0.4078463424601553,
       "hsr": 0.8777527451050592,
-      "displaced": 0.008460937499999998
+      "displaced": 0.008460937499999998,
+      "contracts": 299.4
     },
     {
       "method": "Slice-tuned rule",
@@ -1702,7 +1717,8 @@
       "ci": 0.7903095976695786,
       "hold_share": 0.17829488790692016,
       "hsr": 0.7900631099630583,
-      "displaced": 0.007536458333333333
+      "displaced": 0.007536458333333333,
+      "contracts": 219.9
     },
     {
       "method": "CARE",
@@ -1711,7 +1727,8 @@
       "ci": 0.7393848045550794,
       "hold_share": 0.19656731486765286,
       "hsr": 0.7858070328012441,
-      "displaced": 0.007292968749999999
+      "displaced": 0.007292968749999999,
+      "contracts": 223.9
     },
     {
       "method": "CARE single network",
@@ -1720,7 +1737,8 @@
       "ci": 0.7492309573597489,
       "hold_share": 0.24135710747894998,
       "hsr": 0.7903971372442731,
-      "displaced": 0.0076712239583333315
+      "displaced": 0.0076712239583333315,
+      "contracts": 243.65
     },
     {
       "method": "CARE-PPO",
@@ -1729,7 +1747,8 @@
       "ci": 0.0,
       "hold_share": 0.0,
       "hsr": 0.5162581330761424,
-      "displaced": 0.0
+      "displaced": 0.0,
+      "contracts": 0.0
     },
     {
       "method": "Floor-JIT",
@@ -1738,7 +1757,8 @@
       "ci": 2.0851919459850086,
       "hold_share": 1.0,
       "hsr": 0.8776976142479427,
-      "displaced": 0.00869140625
+      "displaced": 0.00869140625,
+      "contracts": 303.6
     },
     {
       "method": "Tuned rule",
@@ -1747,7 +1767,8 @@
       "ci": 0.0,
       "hold_share": 0.0,
       "hsr": 0.5162581330761424,
-      "displaced": 0.0
+      "displaced": 0.0,
+      "contracts": 0.0
     },
     {
       "method": "Slice-tuned rule",
@@ -1756,7 +1777,8 @@
       "ci": 0.0,
       "hold_share": 0.0,
       "hsr": 0.5162581330761424,
-      "displaced": 0.0
+      "displaced": 0.0,
+      "contracts": 0.0
     },
     {
       "method": "CARE",
@@ -1765,7 +1787,8 @@
       "ci": 0.17706137551158665,
       "hold_share": 0.020252572497661367,
       "hsr": 0.5180058716900465,
-      "displaced": 8.7890625e-05
+      "displaced": 8.7890625e-05,
+      "contracts": 43.3
     },
     {
       "method": "CARE single network",
@@ -1774,7 +1797,8 @@
       "ci": 1.1287548170303068,
       "hold_share": 0.04087454750317647,
       "hsr": 0.5289673250717823,
-      "displaced": 0.0012389322916666668
+      "displaced": 0.0012389322916666668,
+      "contracts": 85.25
     },
     {
       "method": "CARE-PPO",
@@ -1783,7 +1807,8 @@
       "ci": 0.0,
       "hold_share": 0.0,
       "hsr": 0.5162581330761424,
-      "displaced": 0.0
+      "displaced": 0.0,
+      "contracts": 0.0
     },
     {
       "method": "CARE-PPO w/ on-policy wait",
@@ -1792,7 +1817,8 @@
       "ci": 2.0851919459850086,
       "hold_share": 1.0,
       "hsr": 0.8776976142479427,
-      "displaced": 0.00869140625
+      "displaced": 0.00869140625,
+      "contracts": 303.6
     }
   ],
   "frontier_tests": [

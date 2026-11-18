@@ -26,7 +26,15 @@ DIST = ROOT / "dist"
 PAPER_ASSETS = [
     *(
         (f"results/care/figures/{name}.pdf", f"figures/{name}.pdf")
-        for name in ("calibration", "tradeoff", "frontier", "training", "policy", "sweeps")
+        for name in (
+            "headline",
+            "calibration",
+            "tradeoff",
+            "frontier",
+            "training",
+            "policy",
+            "sweeps",
+        )
     ),
     ("results/demo/handover_rescue.jpg", "figures/handover_rescue.jpg"),
     ("results/care/paper_macros.tex", "generated/paper_macros.tex"),
