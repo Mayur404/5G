@@ -12,7 +12,7 @@ Authors: Mayur Raju (24BCS073), Naramsetti Charan Raj Gupta (24BCS083), P Gnande
 | --- | --- |
 | `paper/` | IEEE conference paper: `main.tex`, `references.bib`, `figures/`, `generated/` (tables and result macros copied from `results/care/`) |
 | `Overleaf_Source.zip` | The `paper/` folder, ready for Overleaf (New Project → Upload Project) |
-| `Overleaf_SingleFile.zip` | One self-contained `main.tex` (results, tables and references inlined) plus `figures/`, for pasting into Overleaf |
+| `Overleaf_SingleFile.zip` | One self-contained `main.tex` (results, tables and references inlined) and the 8 figures as PNG files, for pasting into Overleaf |
 | `src/proran/` | Simulator, neural forecaster, calibrator, CARE learner, baselines, experiment and report code (Python, NumPy only) |
 | `web/` | Interactive web lab (Flask) used for the demonstration figure |
 | `tests/` | 107 automated tests, including paper-to-results traceability |
@@ -141,7 +141,7 @@ All defaults live in `src/proran/config.py` (`SimConfig`), `src/proran/care.py` 
 
 **Overleaf:** upload `Overleaf_Source.zip` (New Project → Upload Project). The default pdfLaTeX compiler works; `main.tex` is the main document.
 
-**Overleaf, single file:** `python scripts/build_submission.py standalone` writes `dist/Overleaf_SingleFile/`: one `main.tex` with every result, table and reference inlined, plus `figures/`. Paste that `main.tex` into an Overleaf project and upload the `figures` folder; nothing else is needed. It compiles to the same PDF.
+**Overleaf, single file:** `python scripts/build_submission.py standalone` writes `dist/Overleaf_SingleFile/`: one `main.tex` with every result, table and reference inlined, and the 8 figures as PNG files (200 dpi) in the same folder. Paste that `main.tex` into an Overleaf project and upload the PNGs next to it, not in a subfolder; nothing else is needed. The text is identical to `paper/main.pdf`; only the figures are raster images instead of vector PDFs.
 
 **Locally:**
 

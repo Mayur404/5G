@@ -55,7 +55,7 @@ Build them with `python scripts/build_submission.py pdf standalone package`. The
 | --- | --- |
 | `paper/main.pdf` | The final paper (11 pages) |
 | `dist/Overleaf_Source.zip` | The LaTeX project for Overleaf: New Project → Upload Project |
-| `dist/Overleaf_SingleFile/` | One self-contained `main.tex` (results, tables and references inlined) plus `figures/`. Paste `main.tex` into Overleaf and upload the `figures` folder. |
+| `dist/Overleaf_SingleFile/` | One self-contained `main.tex` (results, tables and references inlined) and the 8 figures as PNG files, all in one folder. Paste `main.tex` into Overleaf and upload the PNGs next to it. |
 | `dist/CARE_Final_Submission.zip` | Everything for the submission form: both Overleaf versions, the PDF, code, trained models, results, setup files and the revision report (about 14 MB) |
 | `revision_reports/Revision_Report.docx` | Deep Review comments and the change made for each, round by round |
 | [REPRODUCE.md](REPRODUCE.md) | Installation, data, seeds, settings and the exact command behind every figure and table |

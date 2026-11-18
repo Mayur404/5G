@@ -99,8 +99,9 @@ def compile_pdf(directory: Path = PAPER, keep_bbl: bool = False) -> None:
 
 def standalone() -> Path:
     """Write dist/Overleaf_SingleFile/: one main.tex with every result, table and
-    reference inlined, plus figures/. Paste main.tex into any Overleaf project and
-    upload the figures folder; nothing else is needed."""
+    reference inlined, plus the figures as PNG files in the same folder. Paste
+    main.tex into any Overleaf project and upload the PNGs next to it; nothing else
+    is needed."""
     build = DIST / "_build"
     shutil.rmtree(build, ignore_errors=True)
     shutil.copytree(PAPER, build, ignore=shutil.ignore_patterns("*.pdf", "*.aux", "*.bbl"))
@@ -128,19 +129,27 @@ def standalone() -> Path:
     tex = tex.replace("\\bibliographystyle{IEEEtran}\n\\bibliography{references}", bbl.strip())
     assert r"\input{" not in tex and r"\bibliography{" not in tex, "standalone still has inputs"
 
+    # Flat layout with PNG images only: upload main.tex and the PNGs side by side.
+    tex = tex.replace(r"\graphicspath{{figures/}}", r"\graphicspath{{./}{figures/}}")
+    tex = re.sub(r"(\\includegraphics(?:\[[^]]*\])?\{)([^}.]+)\.(?:pdf|jpg)\}", r"\1\2.png}", tex)
     out = DIST / "Overleaf_SingleFile"
     shutil.rmtree(out, ignore_errors=True)
-    (out / "figures").mkdir(parents=True)
+    out.mkdir(parents=True)
     (out / "main.tex").write_text(tex, encoding="utf-8", newline="\n")
-    for figure in (PAPER / "figures").iterdir():
-        shutil.copyfile(figure, out / "figures" / figure.name)
+    for stem in re.findall(r"\\includegraphics(?:\[[^]]*\])?\{([^}.]+)\.png\}", tex):
+        png = ROOT / "results" / "care" / "figures" / f"{stem}.png"
+        if png.exists():
+            shutil.copyfile(png, out / png.name)
+        else:  # The web-lab screenshot is a JPEG; store it losslessly as PNG.
+            from PIL import Image
+
+            Image.open(PAPER / "figures" / f"{stem}.jpg").save(out / f"{stem}.png")
     shutil.rmtree(build, ignore_errors=True)
 
     # Prove it compiles on its own, then drop the build products.
     compile_pdf(out)
-    for leftover in out.iterdir():
-        if leftover.is_file() and leftover.name != "main.tex":
-            leftover.unlink()
+    for suffix in (".pdf", ".aux", ".log", ".bbl", ".blg", ".out", ".xdv"):
+        (out / f"main{suffix}").unlink(missing_ok=True)
     archive = DIST / "Overleaf_SingleFile.zip"
     with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as zf:
         for file in _files(out):
