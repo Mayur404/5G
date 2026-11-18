@@ -138,6 +138,8 @@ All defaults live in `src/proran/config.py` (`SimConfig`), `src/proran/care.py` 
 
 **Overleaf:** upload `Overleaf_Source.zip` (New Project → Upload Project). The default pdfLaTeX compiler works; `main.tex` is the main document.
 
+**Overleaf, single file:** `python scripts/build_submission.py standalone` writes `dist/Overleaf_SingleFile/`: one `main.tex` with every result, table and reference inlined, plus `figures/`. Paste that `main.tex` into an Overleaf project and upload the `figures` folder; nothing else is needed. It compiles to the same PDF.
+
 **Locally:**
 
 ```sh
