@@ -4,12 +4,15 @@ This guide covers everything needed to install the project, check it, regenerate
 
 Paper: `paper/main.pdf` (LaTeX source in `paper/`, the same files as `Overleaf_Source.zip`).
 
+Authors: Mayur Raju (24BCS073), Naramsetti Charan Raj Gupta (24BCS083), P Gnandeep (24BCS095), P Sanjay (24BCS100), S Sudharsan Reddy (24BCS130), Shaik Moiz (24BCS133). Department of Computer Science and Engineering, Indian Institute of Information Technology Dharwad.
+
 ## 1. What is in the submission
 
 | Path | Contents |
 | --- | --- |
 | `paper/` | IEEE conference paper: `main.tex`, `references.bib`, `figures/`, `generated/` (tables and result macros copied from `results/care/`) |
 | `Overleaf_Source.zip` | The `paper/` folder, ready for Overleaf (New Project → Upload Project) |
+| `Overleaf_SingleFile.zip` | One self-contained `main.tex` (results, tables and references inlined) plus `figures/`, for pasting into Overleaf |
 | `src/proran/` | Simulator, neural forecaster, calibrator, CARE learner, baselines, experiment and report code (Python, NumPy only) |
 | `web/` | Interactive web lab (Flask) used for the demonstration figure |
 | `tests/` | 107 automated tests, including paper-to-results traceability |
@@ -108,7 +111,7 @@ python -m proran.care_experiment tune evaluate report
 
 This retunes the 45 threshold rules on seeds 5000–5009, selects replicas, and evaluates all 12 methods plus the sweeps and mechanism ablations on test seeds 9000–9019 (1,380 runs). On the reference machine the results are bit-identical to the files shipped in `results/care/`. Only the wall-clock `seconds` column of `runs.csv` changes.
 
-## 7. Rerun the full study from scratch (about 50 min on 16 threads)
+## 7. Rerun the full study from scratch (about 47 min on 16 threads)
 
 ```sh
 python -m proran.neural                 # optional: retrain the forecaster (writes results/deep/)
@@ -157,7 +160,7 @@ See the "Run the live demo" section of `README.md` for a walkthrough. A recorded
 ## 11. Rebuild the submission zip
 
 ```sh
-python scripts/build_submission.py pdf package
+python scripts/build_submission.py pdf standalone package
 ```
 
-This writes `dist/Overleaf_Source.zip` and `dist/CARE_Final_Submission.zip`, which contains the Overleaf zip, the paper PDF, all code, models, results, this guide and the revision reports.
+This writes `dist/Overleaf_Source.zip`, `dist/Overleaf_SingleFile/` (and its zip) and `dist/CARE_Final_Submission.zip`. The last one contains both Overleaf versions, the paper PDF, all code, models, results, this guide and the revision reports.
