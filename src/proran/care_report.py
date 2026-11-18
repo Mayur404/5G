@@ -277,7 +277,7 @@ def fig_headline(rows: list[dict], path: Path) -> None:
     _style(right)
     right.tick_params(axis="x", labelsize=6.8)
     fig.tight_layout()
-    fig.savefig(path.with_suffix(".pdf"))
+    fig.savefig(path.with_suffix(".pdf"), metadata={"CreationDate": None})
     fig.savefig(path.with_suffix(".png"), dpi=200)
     plt.close(fig)
 
@@ -337,7 +337,7 @@ def fig_calibration(calibration: dict, path: Path) -> None:
     right.legend(fontsize=7, frameon=False, loc="lower left")
     _style(right)
     fig.tight_layout()
-    fig.savefig(path.with_suffix(".pdf"))
+    fig.savefig(path.with_suffix(".pdf"), metadata={"CreationDate": None})
     fig.savefig(path.with_suffix(".png"), dpi=200)
     plt.close(fig)
 
@@ -374,7 +374,7 @@ def fig_tradeoff(table: dict, path: Path) -> None:
     handles, labels = left.get_legend_handles_labels()
     fig.legend(handles, labels, loc="upper center", ncol=4, fontsize=7, frameon=False)
     fig.tight_layout(rect=(0, 0, 1, 0.86))
-    fig.savefig(path.with_suffix(".pdf"))
+    fig.savefig(path.with_suffix(".pdf"), metadata={"CreationDate": None})
     fig.savefig(path.with_suffix(".png"), dpi=200)
     plt.close(fig)
 
@@ -414,7 +414,7 @@ def fig_frontier(frontier: list[dict], path: Path) -> None:
     ax.legend(fontsize=6.5, frameon=False)
     _style(ax)
     fig.tight_layout()
-    fig.savefig(path.with_suffix(".pdf"))
+    fig.savefig(path.with_suffix(".pdf"), metadata={"CreationDate": None})
     fig.savefig(path.with_suffix(".png"), dpi=200)
     plt.close(fig)
 
@@ -445,7 +445,7 @@ def fig_sweeps(sweeps: dict, path: Path) -> None:
     axes[0].set_ylabel("Handover success (%)", fontsize=8)
     axes[0].legend(fontsize=6.3, frameon=False, loc="lower left")
     fig.tight_layout()
-    fig.savefig(path.with_suffix(".pdf"))
+    fig.savefig(path.with_suffix(".pdf"), metadata={"CreationDate": None})
     fig.savefig(path.with_suffix(".png"), dpi=200)
     plt.close(fig)
 
@@ -493,7 +493,7 @@ def fig_policy(action_shares: dict, path: Path) -> None:
     handles, names = ax.get_legend_handles_labels()
     fig.legend(handles, names, fontsize=6, frameon=False, ncol=3, loc="lower center")
     fig.tight_layout(rect=(0, 0.22, 1, 1))
-    fig.savefig(path.with_suffix(".pdf"))
+    fig.savefig(path.with_suffix(".pdf"), metadata={"CreationDate": None})
     fig.savefig(path.with_suffix(".png"), dpi=200)
     plt.close(fig)
 
@@ -528,7 +528,7 @@ def fig_training(directory: Path, lambdas, replica: int, path: Path) -> None:
     handles, labels = axes[0].get_legend_handles_labels()
     fig.legend(handles, labels, loc="upper center", ncol=4, fontsize=7, frameon=False)
     fig.tight_layout(rect=(0, 0, 1, 0.88))
-    fig.savefig(path.with_suffix(".pdf"))
+    fig.savefig(path.with_suffix(".pdf"), metadata={"CreationDate": None})
     fig.savefig(path.with_suffix(".png"), dpi=200)
     plt.close(fig)
 

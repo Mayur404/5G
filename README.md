@@ -104,6 +104,10 @@ Controls: the speed menu next to Play sets 0.5×–4× playback. Space pauses, a
 
 A recorded, captioned demo (94 s) is in [results/demo/care_demo.mp4](results/demo/care_demo.mp4).
 
+| CARE explains its decision | The paper's benchmark (32 devices) |
+| --- | --- |
+| ![CARE compares the learned value of every action and holds UE1's 5-RB admission floor at C0](results/demo/care_decision.jpg) | ![After 7.3 s of test seed 9000, CARE admits 88% of handovers against 30% without reservation](results/demo/benchmark.jpg) |
+
 ![CARE admits the uRLLC handover that the unreserved network blocks](results/demo/handover_rescue.jpg)
 
 ## Verify everything
@@ -157,7 +161,6 @@ Outputs go to `results/care/`. Every number in `paper/main.tex` is a macro gener
 | `src/proran/care.py` | CARE: contract reward, fitted-Q learner, Q-ensemble, PPO ablation |
 | `src/proran/care_experiment.py` | End-to-end experiment: calibrate, train, tune baselines, evaluate on held-out seeds |
 | `src/proran/care_report.py` | Statistics (paired tests, Holm), tables, figures, paper macros |
-| `src/proran/policies.py` | Simple reference policies used in tests |
 | `web/server.py`, `web/static/` | Flask/Waitress API and the interactive network map |
 | `tests/` | Python tests and the browser UI test |
 | `results/care/` | Calibrator, trained models, raw per-seed runs, statistics, figures, paper macros |
@@ -166,7 +169,7 @@ Outputs go to `results/care/`. Every number in `paper/main.tex` is a macro gener
 | `paper/` | Final IEEE conference paper: `main.tex`, `main.pdf`, `references.bib`, figures, generated tables and macros |
 | `scripts/build_submission.py` | Sync results into the paper, compile it, build the single-file Overleaf version and the submission zips |
 | `revision_reports/` | Deep Review comments and revision log |
-| `docs/` | Original problem statement, project brief and the PreNS reference paper |
+| `docs/` | Original problem statement and project brief (the PreNS reference paper is cited in the paper, not redistributed) |
 | `REPRODUCE.md` | Install, data, seeds, settings and exact commands for every result |
 
 ## Container

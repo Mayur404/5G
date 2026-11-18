@@ -98,7 +98,6 @@ class RunMetrics:
     served_rbs_by_ue: dict[int, int] = field(default_factory=dict)
     displaced_rb_intervals: float = 0.0
     rescued_handovers: int = 0
-    qos_rescued_handovers: int = 0
     outage_ue_intervals: int = 0
     decisions: int = 0
 

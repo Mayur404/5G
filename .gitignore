@@ -24,3 +24,6 @@ results_candidate*/
 *.toc
 *.synctex.gz
 dist/
+
+# Third-party paper kept locally only (copyright); cited in the paper.
+docs/PreNS_reference.pdf

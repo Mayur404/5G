@@ -712,7 +712,6 @@ class RANHandoverEnv:
             rescued = bool(success and not success_without)
             qos_rescued = bool(qos_ok and not qos_without)
             self.metrics.rescued_handovers += int(rescued)
-            self.metrics.qos_rescued_handovers += int(qos_rescued)
             if not success and self.cfg.failure_outage:
                 # Failed admission triggers radio-link re-establishment.
                 self.outage_until[ue.uid] = self.t + self.cfg.failure_outage

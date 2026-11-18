@@ -273,15 +273,6 @@ def contract_reward(outcome: dict, outage: int, cfg: CareConfig) -> float:
     return (rescue + qos - cfg.displacement_weight * outcome["displaced"]) / cfg.reward_scale
 
 
-def realized_utility(env: RANHandoverEnv, cfg: CareConfig) -> float:
-    """Net utility of all contracts in a finished run, per interval, in RB units."""
-    total = sum(
-        contract_reward(outcome, env.cfg.failure_outage, cfg) * cfg.reward_scale
-        for outcome in env.contract_outcomes.values()
-    )
-    return total / max(1, env.metrics.steps)
-
-
 def collect_episode(sim_cfg: SimConfig, predictor, calibrator, steps: int, seed: int, choose):
     """Run one training episode; ``choose(state, mask) -> (action, extra)``.
 

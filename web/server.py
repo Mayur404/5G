@@ -17,8 +17,13 @@ from proran.calibration import LogisticCalibrator
 from proran.care import CareConfig, CareEnsemblePolicy
 from proran.config import SimConfig
 from proran.neural import NeuralPredictor, proactive
-from proran.policies import no_reservation
 from proran.simulator import RANHandoverEnv
+
+
+def no_reservation(state, mask, context) -> int:
+    """Baseline for the side-by-side map: never hold capacity."""
+    return 0
+
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "web" / "static"

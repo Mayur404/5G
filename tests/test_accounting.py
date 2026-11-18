@@ -3,8 +3,19 @@ import pytest
 
 from proran.actions import decode_action
 from proran.config import SimConfig
-from proran.policies import certainty_equivalent, no_reservation
 from proran.simulator import RANHandoverEnv
+
+
+def no_reservation(state, mask, context) -> int:
+    return 0
+
+
+def certainty_equivalent(state, mask, context) -> int:
+    """Reserve the full forecast demand immediately when the forecast score is high."""
+    pred = context.get("prediction")
+    if pred is None or pred.probability < 0.42:
+        return 0
+    return next((a for a in (2, 1) if a < len(mask) and mask[a]), 0)
 
 
 def test_noop_is_always_legal_and_masks_have_fixed_shape():

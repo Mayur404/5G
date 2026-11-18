@@ -118,10 +118,6 @@ class Rule:
         return action if mask[action] else 0
 
 
-def _rule_spec(rule: Rule) -> dict:
-    return {"default": rule.default, "max_lead": rule.max_lead, "per_slice": rule.per_slice}
-
-
 def _load_models():
     predictor = NeuralPredictor.load(PREDICTOR)
     calibrator = LogisticCalibrator.load(OUT / "calibrator.npz")
