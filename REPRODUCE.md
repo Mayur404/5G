@@ -12,7 +12,7 @@ Authors: Mayur Raju (24BCS073), Naramsetti Charan Raj Gupta (24BCS083), P Gnande
 | --- | --- |
 | `paper/` | IEEE conference paper: `main.tex`, `references.bib`, `figures/`, `generated/` (tables and result macros copied from `results/care/`) |
 | `Overleaf_Source.zip` | The `paper/` folder, ready for Overleaf (New Project → Upload Project) |
-| `Overleaf_SingleFile.zip` | One self-contained `main.tex` (results, tables and references inlined) and the 8 figures as PNG files, for pasting into Overleaf |
+| `Overleaf_SingleFile.zip` | One self-contained `main.tex` (results, tables and references inlined) and the 7 figures as PNG files, for pasting into Overleaf |
 | `src/proran/` | Simulator, neural forecaster, calibrator, CARE learner, baselines, experiment and report code (Python, NumPy only) |
 | `web/` | Interactive web lab (Flask) used for the demonstration figure |
 | `tests/` | 107 automated tests, including paper-to-results traceability |
@@ -98,7 +98,6 @@ This rewrites `results/care/{summary,paired,frontier,sweeps}.csv`, `main_table.t
 | Fig. 7 (training curves) | `care_report.fig_training` | `figures/training.pdf` |
 | Fig. 8 (learned policy) | `care_report.fig_policy` | `figures/policy.pdf` |
 | Fig. 9 (sensitivity) | `care_report.fig_sweeps` | `figures/sweeps.pdf` |
-| Fig. 10 (web lab) | screenshot of `python -m web.server` | `figures/handover_rescue.jpg` |
 | Table V (main results) | `care_report` | `generated/main_table.tex` |
 | Table VI (price response) | `care_report` | `generated/frontier_table.tex` |
 | Every number in the text | `care_report._write_macros` | `generated/paper_macros.tex` |
@@ -141,7 +140,7 @@ All defaults live in `src/proran/config.py` (`SimConfig`), `src/proran/care.py` 
 
 **Overleaf:** upload `Overleaf_Source.zip` (New Project → Upload Project). The default pdfLaTeX compiler works; `main.tex` is the main document.
 
-**Overleaf, single file:** `python scripts/build_submission.py standalone` writes `dist/Overleaf_SingleFile/`: one `main.tex` with every result, table and reference inlined, and the 8 figures as PNG files (200 dpi) in the same folder. Paste that `main.tex` into an Overleaf project and upload the PNGs next to it, not in a subfolder; nothing else is needed. The text is identical to `paper/main.pdf`; only the figures are raster images instead of vector PDFs.
+**Overleaf, single file:** `python scripts/build_submission.py standalone` writes `dist/Overleaf_SingleFile/`: one `main.tex` with every result, table and reference inlined, and the 7 figures as PNG files (200 dpi) in the same folder. Paste that `main.tex` into an Overleaf project and upload the PNGs next to it, not in a subfolder; nothing else is needed. The text is identical to `paper/main.pdf`; only the figures are raster images instead of vector PDFs.
 
 **Locally:**
 

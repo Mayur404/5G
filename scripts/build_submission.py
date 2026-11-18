@@ -38,7 +38,6 @@ PAPER_ASSETS = [
             "sweeps",
         )
     ),
-    ("results/demo/handover_rescue.jpg", "figures/handover_rescue.jpg"),
     ("results/care/paper_macros.tex", "generated/paper_macros.tex"),
     ("results/care/main_table.tex", "generated/main_table.tex"),
     ("results/care/frontier_table.tex", "generated/frontier_table.tex"),
