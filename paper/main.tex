@@ -8,6 +8,7 @@
 \usepackage{textcomp}
 \usepackage{xcolor}
 \usepackage{booktabs}
+\usepackage{array}
 \usepackage{url}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning,calc,fit,backgrounds,shapes.geometric}
@@ -56,7 +57,7 @@ Holding resource blocks at a target cell before a device arrives protects sliced
 \section{Introduction}
 Network slicing lets one radio access network (RAN) serve enhanced mobile broadband (eMBB), ultra-reliable low-latency communication (uRLLC) and massive machine-type communication (mMTC) with different service objectives~\cite{foukas2017slicing,afolabi2018slicing,3gpp28541}. Mobility couples the slices. A device (UE) that crosses into a loaded cell must be admitted with at least its slice's minimum resource-block (RB) allocation. If it is not, the handover fails and the UE spends several intervals re-establishing its radio link~\cite{3gpp38300}. Holding capacity at the target cell before the UE arrives is an old remedy. It goes back to guard channels~\cite{hong1986guard} and to shadow-cluster and predictive bandwidth reservation~\cite{levine1997shadow,choi1998predictive}, and learned mobility and demand forecasting has renewed interest in it for sliced 5G RANs~\cite{wu2026prens,li2020mobility,bega2020deepcog,gharehgoli2023uncertainty,phyu2023mlslicing}. AI/ML-driven proactive handover is now proposed as a paradigm shift in mobility management for 6G~\cite{park2024proactive}.
 
-Proactive reservation has a hidden cost. Capacity held for an arriving UE is withheld from the UEs already in the cell. In an idle cell that costs nothing. In a contested cell the hold displaces incumbent service, and it pays off only if the arrival would otherwise have failed. Three questions decide whether a hold is worth placing. Is the forecast target right? Will the target cell be short of capacity when the UE arrives? Does the arriving UE's slice justify the service the hold takes from others? Forecast-then-reserve pipelines usually treat the forecast as certain and reward handover success. That pushes a learned controller toward holding too much, too early.
+Proactive reservation has a hidden cost. Capacity held for an arriving UE is withheld from the UEs already in the cell. In an idle cell that costs nothing. In a contested cell the hold displaces incumbent service, and it pays off only if the arrival would otherwise have failed. Three questions decide whether a hold is worth placing. Is the forecast target right? Will the target cell be short of capacity when the UE arrives? Does the arriving UE's slice justify the service the hold takes from others? Forecast-then-reserve pipelines usually treat the forecast as certain and reward handover success. That pushes a learned controller toward holding too much, too early. PreNS~\cite{wu2026prens}, the reference framework for this work, already argues that a controller should weigh how far it trusts a forecast before acting on it. CARE takes that idea down to the level of individual handovers.
 
 This paper presents \emph{CARE} (Calibrated, Attribution-Rewarded rEservation), a controller that answers each question explicitly. Its contributions are:
 \begin{enumerate}
@@ -74,7 +75,29 @@ The rest of the paper is organized as follows. Section~\ref{sec:related} reviews
 \section{Related Work}\label{sec:related}
 \textbf{Handover reservation.} Guard channels set aside fixed capacity for handovers~\cite{hong1986guard}. Shadow clusters and predictive schemes size reservations from mobility estimates~\cite{levine1997shadow,choi1998predictive}. These schemes assume a single service class and do not charge for the capacity they withhold from incumbents. Recent work makes the handover itself proactive. Park et al.\ forecast radio measurements to choose the handover time and the best target cell~\cite{park2024proactive}, and Manalastas et al.\ predict inter-frequency handover failures from the received power of the source, target and interfering cells~\cite{manalastas2023hofailure}. These methods predict \emph{when} and \emph{where} a handover will happen or fail. CARE takes such a forecast as input and decides how much capacity to hold for it, and when.
 
-\textbf{Learning for sliced RANs.} Machine learning for network slicing is surveyed in~\cite{phyu2023mlslicing}. DeepCog forecasts slice capacity with a cost-aware loss~\cite{bega2020deepcog}. Deep reinforcement learning has been combined with deep learning for energy-efficient power and RB allocation in RAN slicing~\cite{azimi2022drlslicing}, and used for slice admission control and resource allocation in the 5G core~\cite{villota2022admission}. LSTM-assisted actor-critic learning allocates slice resources under user mobility~\cite{li2020mobility}. Robust allocation under demand and channel uncertainty is studied in~\cite{gharehgoli2023uncertainty}. PreNS combines prediction with real-time allocation for RAN slicing~\cite{wu2026prens}. CARE differs from these works in where it applies learning. It decides per-device reservation contracts rather than slice-level shares, and it learns from counterfactual per-contract credit rather than a network-level reward.
+\textbf{Learning for sliced RANs.} Machine learning for network slicing is surveyed in~\cite{phyu2023mlslicing}. DeepCog forecasts slice capacity with a cost-aware loss~\cite{bega2020deepcog}. Deep reinforcement learning has been combined with deep learning for energy-efficient power and RB allocation in RAN slicing~\cite{azimi2022drlslicing}, and used for slice admission control and resource allocation in the 5G core~\cite{villota2022admission}. LSTM-assisted actor-critic learning allocates slice resources under user mobility~\cite{li2020mobility}. Robust allocation under demand and channel uncertainty is studied in~\cite{gharehgoli2023uncertainty}. CARE differs from these works in where it applies learning. It decides per-device reservation contracts rather than slice-level shares, and it learns from counterfactual per-contract credit rather than a network-level reward.
+
+\textbf{Relation to PreNS.} PreNS~\cite{wu2026prens} is the closest work and the starting point of this project. It forecasts short-term slice traffic with an attention-based Bi-LSTM and allocates resources across slices with a Double Deep Q-Network. Its key idea is a \emph{confidence-aware aggregated state}: forecasts and real-time measurements are fused with weights that reflect how reliable each source has recently been, where the prediction confidence is the inverse of the average forecast error over a recent window. On a 5G testbed, PreNS improves resource utilization by about 14\%, latency by 20\% and QoS satisfaction by 5\% over prior methods. CARE keeps the principle that a controller should act on forecasts in proportion to how much they can be trusted, but changes three things (Table~\ref{tab:prens}). It replaces the error-based weight with a calibrated probability that a specific handover forecast is right; it decides per-device reservation contracts at handover time instead of slice-level shares; and it rewards each hold only for the admission it rescues, net of the capacity it takes from incumbents. PreNS is not run as a baseline here: it allocates slice-level capacity, whereas CARE decides per-handover holds, so the two answer different questions on the same network.
+
+\begin{table}[!t]
+\centering
+\caption{PreNS~\cite{wu2026prens} and CARE side by side.}
+\label{tab:prens}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.19\columnwidth}>{\raggedright\arraybackslash}p{0.37\columnwidth}>{\raggedright\arraybackslash}p{0.37\columnwidth}}
+\toprule
+ & PreNS & CARE (this work)\\
+\midrule
+Forecast & Attention Bi-LSTM, slice traffic & MLP, per-UE position and demand\\
+Trust in forecast & Inverse of recent mean error & Calibrated probability that the target cell is right\\
+Decision & Slice-level resource shares & Per-handover hold: whether, how much, when\\
+Learner & Double DQN & Fitted Q iteration with optimal stopping, Q-ensemble\\
+Reward & Throughput, QoS and fairness & Counterfactual rescue minus priced displacement\\
+Evaluation & 5G testbed & Simulator, 20 held-out paired seeds, Holm-corrected tests\\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \textbf{Calibration and credit assignment.} Post-hoc calibration~\cite{platt1999probabilistic,guo2017calibration} and proper scoring rules~\cite{brier1950verification} are standard in machine learning. In wireless systems, conformal prediction has recently been used to calibrate AI models for demodulation, modulation classification and channel prediction~\cite{cohen2023conformal}, but calibration is rarely applied to RAN reservation. Counterfactual baselines for credit assignment come from multi-agent reinforcement learning~\cite{foerster2018coma}. CARE learns action values by fitted Q iteration~\cite{ernst2005tree,riedmiller2005nfq}, a batch method that reuses every logged transition, in the spirit of recent offline reinforcement learning for radio resource management~\cite{eldeeb2025offline}. We compare it with proximal policy optimization (PPO)~\cite{schulman2017ppo}.
 

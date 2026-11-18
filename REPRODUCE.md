@@ -99,8 +99,8 @@ This rewrites `results/care/{summary,paired,frontier,sweeps}.csv`, `main_table.t
 | Fig. 8 (learned policy) | `care_report.fig_policy` | `figures/policy.pdf` |
 | Fig. 9 (sensitivity) | `care_report.fig_sweeps` | `figures/sweeps.pdf` |
 | Fig. 10 (web lab) | screenshot of `python -m web.server` | `figures/handover_rescue.jpg` |
-| Table IV (main results) | `care_report` | `generated/main_table.tex` |
-| Table V (price response) | `care_report` | `generated/frontier_table.tex` |
+| Table V (main results) | `care_report` | `generated/main_table.tex` |
+| Table VI (price response) | `care_report` | `generated/frontier_table.tex` |
 | Every number in the text | `care_report._write_macros` | `generated/paper_macros.tex` |
 
 ## 6. Re-evaluate the saved models (about 6 min on 16 threads)
@@ -131,7 +131,7 @@ On other platforms or BLAS builds, floating-point summation order can differ sli
 
 ## 8. Main settings and baseline configurations
 
-All defaults live in `src/proran/config.py` (`SimConfig`), `src/proran/care.py` (`CareConfig`) and the `BASE` configuration at the top of `src/proran/care_experiment.py`. Table II of the paper lists them. In short:
+All defaults live in `src/proran/config.py` (`SimConfig`), `src/proran/care.py` (`CareConfig`) and the `BASE` configuration at the top of `src/proran/care_experiment.py`. Table III of the paper lists them. In short:
 
 - **Simulation:** 4 cells × 60 RB, 32 UEs, 100 ms intervals, 320 intervals per run, outage 3 intervals after a failed admission, preparation delay 1 interval, floor-protected activation, retiming of pending holds, up to 32 decisions per interval.
 - **CARE:** Q-network 17–64–64–10 (tanh), Adam lr 1e-3, minibatch 512, 6 epochs × 2 target iterations every 4 episodes, γ = 0.98, ε annealed 1 → 0.05 over the first 75 % of 240 episodes, ensemble of 3 replicas, reward weights w = (1, 2, 0.5) for (eMBB, uRLLC, mMTC), QoS value q = 4.
